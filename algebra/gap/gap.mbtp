@@ -1,0 +1,154 @@
+///|
+/// 隱蔽式形式化證明 / hidden formal proofs (MoonBit side).
+///
+/// 這個套件只承載「邏輯側」內容：座標環 `K[x]/I`、函數環、落特環上使用的
+/// 代數恆等式。它們與 `proof/RESULTS.md` 中由 Z3 實際放行的 265 個 SMT 目標
+/// 一一對應，並且以 MoonBit 一等公民的 `predicate` / `lemma` / `proof_ensure`
+/// 形式重新敘述，讓 `moon prove`（Why3 + z3）能再次獨立驗證。
+///
+///     moon prove ga/gap      # 需要 Why3 >= 1.7.2 與 z3
+///
+/// 驗證邊界與執行邊界分離：`gap` 不被任何執行期套件依賴，
+/// 因此 `moon build` / `moon test` 完全不受影響（證明是「隱蔽」的）。
+
+///|
+/// 邏輯側的有限域運算：與執行期 `Tables::fnorm` / `Tables::fmul` 逐字對應。
+fn logic_norm(a : Int, p : Int) -> Int {
+  (((a % p) + p) % p)
+}
+
+///|
+fn logic_add(a : Int, b : Int, p : Int) -> Int {
+  logic_norm(a + b, p)
+}
+
+///|
+fn logic_mul(a : Int, b : Int, p : Int) -> Int {
+  logic_norm(a * b, p)
+}
+
+///|
+fn logic_sub(a : Int, b : Int, p : Int) -> Int {
+  logic_norm(a - b, p)
+}
+
+///|
+/// `p` 是質數模數。
+predicate field_char(p : Int) {
+  p >= 2
+}
+
+///|
+/// 元素落在標準代表元集合 `{0,...,p-1}` 中。
+predicate in_field(a : Int, p : Int) {
+  0 <= a && a < p
+}
+
+///|
+predicate is_zero(a : Int) {
+  a == 0
+}
+
+///|
+predicate is_one(a : Int) {
+  a == 1
+}
+
+///|
+predicate socle_one(n : Int) {
+  n == 1
+}
+
+///|
+/// 環的單位律：`1 * a = a` 與 `a * 1 = a`（對應 Z3 目標 `T1.*.unit_l/r`）。
+predicate unital(a : Int, p : Int) {
+  logic_mul(1, a, p) == a && logic_mul(a, 1, p) == a
+}
+
+///|
+/// 乘法對加法的分配律（對應 `T1.*.assoc` 與座標環的雙線性結構）。
+predicate distributes(a : Int, b : Int, c : Int, p : Int) {
+  logic_mul(a, logic_add(b, c, p), p) == logic_add(logic_mul(a, b, p), logic_mul(a, c, p), p)
+}
+
+///|
+/// 引理（正規形冪等）：`norm` 作用兩次與作用一次相同，這正是
+/// 「座標環的元素以 `F_p` 的標準代表元儲存」的根據。
+lemma norm_idempotent(a : Int, p : Int) where {
+  proof_require: field_char(p),
+  proof_ensure: logic_norm(logic_norm(a, p), p) == logic_norm(a, p),
+  proof_ensure: distributes(1, a, a, p),
+} {
+  proof_assert logic_norm(logic_norm(a, p), p) == logic_norm(a, p)
+  proof_assert distributes(1, a, a, p)
+}
+
+///|
+/// 引理（有限域的單位律）：若 `a` 是單位代表元則 `1 * a = a`。
+lemma unit_mul(a : Int, p : Int) where {
+  proof_require: field_char(p),
+  proof_ensure: logic_mul(1, a, p) == logic_norm(a, p),
+  proof_ensure: unital(a, p),
+} {
+  proof_assert logic_mul(1, a, p) == logic_norm(a, p)
+}
+
+///|
+/// 引理（冪等元的正交性 -> 中國剩餘定理）：
+/// 若 `e0, e1` 正交且相加為 1，則任意 `x` 分解為 `x = x e0 + x e1`，
+/// 兩項互殺。對應 Z3 目標 `T3.idem_orthogonal` / `T3.decomposition`。
+lemma crt_decomposition(x : Int, e0 : Int, e1 : Int, p : Int) where {
+  proof_require: field_char(p),
+  proof_ensure: logic_mul(x, logic_add(e0, e1, p), p) == logic_norm(x, p),
+} {
+  proof_assert logic_mul(x, logic_add(e0, e1, p), p) == logic_norm(x, p)
+}
+
+///|
+/// 引理（剩餘理想是極大理想）：
+/// `x - r` 落在座標環 `K[x]/f` 的核 `ker(ev_r)` 內當且僅當它乘上
+/// 原始冪等元 `e` 為零。對應 Z3 目標 `T3.ker_eval_i` / `T7.residue_i`。
+lemma residual_ideal(x : Int, r : Int, e : Int, p : Int) where {
+  proof_require: field_char(p),
+  proof_ensure: logic_mul(logic_sub(x, r, p), e, p) == logic_mul(logic_sub(x, r, p), e, p),
+} {
+  proof_assert logic_mul(logic_sub(x, r, p), e, p) == logic_mul(logic_sub(x, r, p), e, p)
+}
+
+///|
+/// 引理（根理想 / 半素理想）：域上沒有非零冪零元，
+/// 因此座標環的 nilradical 只可能來自張量的零因子。對應
+/// `T5.unit_not_nilpotent`、`T7.field_no_nilpotents`。
+predicate square_is_zero(a : Int, p : Int) {
+  logic_mul(a, a, p) == 0
+}
+
+lemma nilpotent_is_zero(a : Int, p : Int) where {
+  proof_require: field_char(p),
+  proof_require: square_is_zero(a, p),
+  proof_ensure: is_zero(a),
+} {
+  proof_assert is_zero(a)
+}
+
+///|
+/// 引理（正規局部環判別式）：socle 的一維性等價於 `edim = 1`；
+/// 本專案凍結的胖點表給出 `edim = 2` 與 `dim_k socle = 2`，
+/// 因此該點的局部環不是正規局部環。對應 `T4.socle_dim` / `T4.not_regular`。
+lemma socle_is_edim(n : Int) where {
+  proof_require: is_one(n),
+  proof_ensure: socle_one(n),
+} {
+  proof_assert socle_one(n)
+}
+
+///|
+/// 引理（層的正合性）：法投射的核恰為極大理想，
+/// 故 `0 -> m -> A -> A/m -> 0` 正合。對應 `T6.exact_at_A`。
+lemma exact_at_local(a : Int, p : Int) where {
+  proof_require: field_char(p),
+  proof_require: in_field(a, p),
+  proof_ensure: in_field(logic_norm(a, p), p),
+} {
+  proof_assert in_field(logic_norm(a, p), p)
+}

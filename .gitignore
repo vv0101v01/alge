@@ -1,0 +1,10 @@
+# MoonBit build artefacts
+_build/
+.moon_build/
+*.wasm
+# Python bytecode from the Z3 proof driver
+__pycache__/
+*.pyc
+# editor / OS noise
+.DS_Store
+*.swp

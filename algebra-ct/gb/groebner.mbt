@@ -1,0 +1,442 @@
+///|
+/// Local aliases so the algebra reads like textbook notation.
+type Fp = @poly.Fp
+
+///|
+type Poly = @poly.Poly
+
+///|
+type Order = @poly.Order
+
+///|
+/// A (monomial, coefficient) pair.
+type MTerm = @poly.MTerm
+
+///|
+/// # Buchberger's algorithm with the two standard criteria
+///
+/// **Theorem (Buchberger, 1976).** For a field `K`, a monomial order `<` and
+/// `f_1, ..., f_m in K[x_1..x_n]`, the algorithm terminates and produces a
+/// set `G` with
+///   1. `<G> = <f_1, ..., f_m>`  (all `S`-polynomials reduce to `0` modulo `G`);
+///   2. every `f` satisfies `NF_G(f) = 0  <=>  f in <G>`.
+/// Such a `G` is a Gröbner basis.  Reduced iff additionally no monomial of
+/// `g in G` is divisible by a leading monomial of another element, and all `g`
+/// are monic.
+///
+/// **Why the criteria are sound (complexity reduction).** Naive Buchberger
+/// forms all `s * (s-1)/2` `S`-polynomials and reduces each one, costing
+/// `O(s^2)` normal-form computations -- the dominant term of the whole run.
+/// Two criteria kill most of them *before* the reduction happens:
+///
+/// - **LCM (chain) criterion** [Buchberger]: if for some `k < i < j`
+///   `lm(g_k) | lcm(lm(g_i), lm(g_j))` then `NF(S_ij) = 0`.
+/// - **Product criterion** [Gebauer-Möller]: if `lcm(lm_i, lm_j)` equals
+///   `lcm(lm_k, lm_j)` for some `k < i`, or `lcm(lm_i, lm_k)` for some
+///   `k < j`, then `NF(S_ij) = 0`.
+/// - **Product criterion (Gebauer-Möller)**: discard `(i,j)` when some `k` gives
+///   `lcm(lm_k, lm_j) | l` together with coprime cofactors.
+/// - **Certification**: the whole loop is replayed once more with the
+///   relatively-prime criterion only, which re-reduces everything the product
+///   criterion may have discarded.  A mis-stated criterion can therefore cost
+///   time but can never corrupt the output.
+///
+/// The statistics below are emitted into the generated runtime package, so the
+/// saving is a *measured, asserted* number rather than a claim.
+pub(all) struct GbStats {
+  /// number of `S`-polynomials actually formed (after the criteria)
+  mut spairs_formed : Int32
+  /// number of pairs rejected by the LCM / chain criterion
+  mut spairs_chain_rejected : Int32
+  /// number of pairs rejected by the product criterion
+  mut spairs_product_rejected : Int32
+  /// number of pairs rejected because one leading monomial divides the other
+  mut spairs_dividing_rejected : Int32
+  /// pairs that survived to normal-form computation
+  mut reductions : Int32
+  /// how many reductions produced a non-zero remainder (basis grew)
+  mut basis_growth : Int32
+  /// size of the input generating set and of the final reduced basis
+  mut input_size : Int32
+  mut output_size : Int32
+  /// total term count over all normal-form computations (hardness proxy)
+  mut reduction_terms : Int32
+  /// pairs examined in the criteria-driven phase (phase 1)
+  mut pairs_screened : Int32
+  /// pairs reduced in the certifying phase (phase 2)
+  mut pairs_certified : Int32
+  /// S-polynomials formed by the certifying phase
+  mut formed_certified : Int32
+}
+
+///|
+pub fn GbStats::new(input_size : Int32) -> GbStats {
+  {
+    spairs_formed: 0,
+    spairs_chain_rejected: 0,
+    spairs_product_rejected: 0,
+    spairs_dividing_rejected: 0,
+    reductions: 0,
+    basis_growth: 0,
+    input_size,
+    output_size: 0,
+    reduction_terms: 0,
+    pairs_screened: 0,
+    pairs_certified: 0,
+    formed_certified: 0,
+  }
+}
+
+///|
+/// Pairs a naive implementation would have reduced: `C(s,2)` summed over the
+/// naive growth of the basis.  This is the complexity baseline.
+pub fn GbStats::naive_pairs(self : GbStats) -> Int32 {
+  // Complexity baseline: a naive implementation reduces *every* pair of every
+  // intermediate basis, i.e. sum_{s=input}^{output} C(s,2).  The criterion
+  // driven loop below processes only the pairs that survive a test, so the
+  // difference is the work the criteria save.
+  let mut total = 0
+  let mut s = self.input_size
+  let goal = if self.output_size > self.input_size {
+    self.output_size
+  } else {
+    self.input_size
+  }
+  while s <= goal {
+    total += s * (s - 1) / 2
+    s += 1
+  }
+  total
+}
+
+///|
+/// A Gröbner basis together with the monomial order and the run statistics.
+pub(all) struct Basis {
+  k : Fp
+  order : Order
+  gs : Array[Poly]
+  stats : GbStats
+}
+
+///|
+/// The elements of `Basis`, in the deterministic order used by the emitter.
+pub fn Basis::elems(self : Basis) -> Array[Poly] {
+  self.gs
+}
+
+///|
+pub fn Basis::size(self : Basis) -> Int32 {
+  self.gs.length()
+}
+
+///|
+/// Leading monomials of the basis.
+pub fn Basis::lead_monos(self : Basis) -> Array[Array[Int32]] {
+  self.gs.map(g => g.lead_mono(self.order))
+}
+
+///|
+/// Normal form of `f` modulo the basis.
+pub fn Basis::normal_form(self : Basis, f : Poly) -> Poly {
+  f.normal_form(self.gs, self.order)
+}
+
+///|
+/// `true` iff `f` lies in the ideal generated by the basis.
+pub fn Basis::contains(self : Basis, f : Poly) -> Bool {
+  f.in_ideal(self.gs, self.order)
+}
+
+///|
+/// Drop zero and duplicate generators and make every element monic.
+fn clean_input(_k : Fp, gens : Array[Poly], order : Order) -> Array[Poly] {
+  let out : Array[Poly] = []
+  for g in gens {
+    if !g.is_zero() {
+      let m = g.monic(order)
+      // Structural comparison on the canonical sparse form.  Printing every
+      // generator just to compare it cost a sort plus a string build per
+      // generator on every single Gröbner call.
+      let mut dup = false
+      for kept in out {
+        if kept.same(m) {
+          dup = true
+        }
+      }
+      if !dup {
+        out.push(m)
+      }
+    }
+  }
+  out
+}
+
+///|
+/// Upper bound on the interreduction sweeps.  A sweep that changes nothing
+/// has reached the fixpoint, and the cap only exists so that a pathological
+/// input cannot spin: the usual number of rounds is `1` for a reduced basis
+/// and `2` for one that needs both a tail reduction and a minimality pass.
+const MAX_INTERREDUCE_ROUNDS : Int32 = 8
+
+///|
+/// Safety cap for the bounding-box growth in `standard_monomials`.  A
+/// zero-dimensional ideal converges in at most `n * max(bounds)` rounds; the
+/// cap only bounds a malformed input.
+const MAX_BOUNDS_ROUNDS : Int32 = 64
+
+///|
+/// Upper bound on the saturation chain `I, I : g, I : g^2, ...`.  Noetherian
+/// termination makes the cap unreachable for a real input; it only stops a
+/// malformed one from spinning.
+const MAX_SATURATION_ROUNDS : Int32 = 32
+
+///|
+/// Interreduce: drop the elements whose leading monomial is redundant, then
+/// tail-reduce the survivors.  Yields the *reduced* Gröbner basis, which is
+/// unique for a fixed monomial order -- a fact the emitted runtime tables rely
+/// on.
+///
+/// **Why the reduction set is restricted.**  Reducing every element against
+/// *all* the others is *not* ideal-preserving.  For
+/// `G = {x + y, y^2, x, y}` the normal form of `x + y` modulo `{y^2, x, y}`
+/// is `0`, the normal form of `x` modulo `{x + y, y^2, y}` is `0`, and only
+/// `y` survives: the procedure returned the basis `{y}` of a strictly larger
+/// ideal.  Classically (Cox-Little-O'Shea §2.7) `g_i` is reduced by the
+/// elements whose leading monomial does *not* divide `LM(g_i)`, so the leading
+/// monomial can never be cancelled and the ideal is preserved.
+///
+/// When the round cap is hit the result is a valid but possibly non-reduced
+/// basis, never a wrong one: every sweep only replaces generators by elements
+/// of the same ideal.
+pub fn interreduce(k : Fp, gs : Array[Poly], order : Order) -> Array[Poly] {
+  let mut cur = clean_input(k, gs, order)
+  let mut round = 0
+  let mut changed = true
+  while changed && round < MAX_INTERREDUCE_ROUNDS {
+    changed = false
+    round += 1
+    // 1. distinct leading monomials.  Two elements sharing one are replaced
+    //    by their difference, which keeps the ideal and strictly lowers the
+    //    degree; the first survivor of each leading monomial is kept.
+    let dedup : Array[Poly] = []
+    let ncur = cur.length()
+    for i in 0..<ncur {
+      let mut g = cur[i]
+      for j in 0..<dedup.length() {
+        if @poly.mono_eq(dedup[j].lead_mono(order), cur[i].lead_mono(order)) {
+          g = g.sub(dedup[j])
+          changed = true
+        }
+      }
+      let g = g.monic(order)
+      if g.is_zero() {
+        // `g` was a combination of the elements already kept
+        continue
+      }
+      dedup.push(g)
+    }
+    // 2. tail reduction: g_i <- NF(g_i, {g_j : LM(g_j) does not divide LM(g_i)})
+    let ndedup = dedup.length()
+    let tail : Array[Poly] = []
+    for i in 0..<ndedup {
+      let lm_i = dedup[i].lead_mono(order)
+      let others : Array[Poly] = []
+      for j in 0..<ndedup {
+        if j != i && !@poly.mono_div_by(lm_i, dedup[j].lead_mono(order)) {
+          others.push(dedup[j])
+        }
+      }
+      let t = dedup[i].normal_form(others, order).monic(order)
+      if !t.same(dedup[i]) {
+        changed = true
+      }
+      tail.push(t)
+    }
+    // 3. minimality: drop g_i whose leading monomial is a multiple of another's
+    let minimal : Array[Poly] = []
+    let nt = tail.length()
+    for i in 0..<nt {
+      if tail[i].is_zero() {
+        // `tail[i]` is a combination of the other generators, so dropping it
+        // keeps the ideal.  Its "leading monomial" is the zero monomial, which
+        // would divide everything and poison the next sweep.
+        changed = true
+        continue
+      }
+      let lm_i = tail[i].lead_mono(order)
+      let mut redundant = false
+      for j in 0..<nt {
+        if j != i && @poly.mono_div_by(lm_i, tail[j].lead_mono(order)) {
+          redundant = true
+        }
+      }
+      if redundant {
+        changed = true
+      } else {
+        minimal.push(tail[i])
+      }
+    }
+    cur = minimal
+  }
+  cur
+}
+
+///|
+/// The Buchberger loop, shared by both entry points.
+///
+/// `use_product` switches the Gebauer-Möller product criterion on.  The loop
+/// is run **twice**: once with every criterion, and once more with the
+/// relatively-prime criterion only.  The second pass is the *certification* of
+/// the first: whatever a mis-stated criterion may have discarded is reduced
+/// here, so the returned set is always a Gröbner basis.  The criteria then buy
+/// their speed in the (much more numerous) intermediate rounds, and the cost
+/// of the guarantee is a single `O(s^2)` sweep over the final basis.
+fn buchberger_core(
+  k : Fp,
+  gens : Array[Poly],
+  order : Order,
+) -> (Array[Poly], GbStats) {
+  let stats = GbStats::new(gens.length())
+  let g = clean_input(k, gens, order)
+  let mut phase = 0
+  while phase < 2 {
+    let use_product = phase == 0
+    let mut changed = true
+    while changed {
+      changed = false
+      let s = g.length()
+      let mut i = 0
+      while i < s {
+        let mut j = i + 1
+        while j < s {
+          let lmi = g[i].lead_mono(order)
+          let lmj = g[j].lead_mono(order)
+          if !use_product {
+            stats.pairs_certified += 1
+          } else {
+            stats.pairs_screened += 1
+          }
+          if relatively_prime(lmi, lmj) {
+            stats.spairs_chain_rejected += 1
+          } else if use_product &&
+            product_criterion(g, order, i, j, @poly.mono_lcm(lmi, lmj)) {
+            stats.spairs_product_rejected += 1
+          } else {
+            if use_product {
+              stats.spairs_formed += 1
+            } else {
+              stats.formed_certified += 1
+            }
+            stats.reductions += 1
+            let sp = g[i].s_poly(g[j], order)
+            let r = sp.normal_form(g, order)
+            stats.reduction_terms += sp.num_terms()
+            if !r.is_zero() {
+              stats.basis_growth += 1
+              g.push(r.monic(order))
+              changed = true
+            }
+          }
+          j += 1
+        }
+        i += 1
+      }
+    }
+    phase += 1
+  }
+  stats.output_size = g.length()
+  (g, stats)
+}
+
+///|
+/// Gröbner basis without the interreduction step; used where the exact shape
+/// of the intermediate basis matters (certificates, elimination witnesses).
+pub fn buchberger_unreduced(k : Fp, gens : Array[Poly], order : Order) -> Basis {
+  let (g, stats) = buchberger_core(k, gens, order)
+  { k, order, gs: g, stats, }
+}
+
+///|
+/// Gröbner basis, then interreduced: the result is the *reduced* Gröbner
+/// basis, which is unique for a given monomial order.
+pub fn buchberger(k : Fp, gens : Array[Poly], order : Order) -> Basis {
+  let (g, stats) = buchberger_core(k, gens, order)
+  let red = interreduce(k, g, order)
+  stats.output_size = red.length()
+  { k, order, gs: red, stats, }
+}
+
+///|
+/// **Relatively prime criterion.**  `gcd(LM(g_i), LM(g_j)) = 1` forces the
+/// S-polynomial to reduce to `0` (Cox-Little-O'Shea, Lemma 3.11).
+fn relatively_prime(lm_i : Array[Int32], lm_j : Array[Int32]) -> Bool {
+  @poly.mono_eq(@poly.mono_gcd(lm_i, lm_j), @poly.mono_one(lm_i.length()))
+}
+
+///|
+/// **Product criterion (Gebauer-Möller).**  Put `l = lcm(LM_i, LM_j)`.  If
+/// some `k < j` satisfies `lcm(LM_k, LM_j) | l` together with
+/// ```
+///   gcd( LM_k / gcd(LM_k, LM_j),  LM_i / gcd(LM_k, LM_i) ) = 1,
+/// ```
+/// the pair `(i, j)` is discardable: its S-polynomial reduces to `0` thanks to
+/// the pairs already processed that involve `k`.  Valid for the Buchberger
+/// pair order `(i, j)` with `i < j`, which is the order used below.
+///
+/// **Warning.**  An "optimisation" that merely looks for a third element with
+/// the same lcm is *not* the product criterion and silently returns bases that
+/// are not Gröbner bases; the cofactor gcd is what makes the statement true.
+fn product_criterion(
+  g : Array[Poly],
+  order : Order,
+  i : Int32,
+  j : Int32,
+  l : Array[Int32],
+) -> Bool {
+  let lm_i = g[i].lead_mono(order)
+  let lm_j = g[j].lead_mono(order)
+  let mut k = 0
+  while k < j {
+    let lm_k = g[k].lead_mono(order)
+    let lkj = @poly.mono_lcm(lm_k, lm_j)
+    // k must be a *third* element: with k = i the cofactor gcd below is
+    // trivially 1 and every pair would be discarded.
+    if k != i && @poly.mono_multiple_of(lkj, l) {
+      let u = @poly.mono_div_safe(lm_k, @poly.mono_gcd(lm_k, lm_j))
+      let v = @poly.mono_div_safe(lm_i, @poly.mono_gcd(lm_k, lm_i))
+      if @poly.mono_eq(@poly.mono_gcd(u, v), @poly.mono_one(lm_i.length())) {
+        return true
+      }
+    }
+    k += 1
+  }
+  false
+}
+
+///|
+/// Hilbert-style dimension bound: for a `0`-dimensional ideal with basis size
+/// `s` and all pure leading monomials of degree `<= d`, the vector space
+/// `R/I` has dimension `<= d^s`.  Used as a cheap sanity check on the emitted
+/// cardinality.
+///
+/// A leading monomial counts as *pure* when it is a power `x_i^d` of a single
+/// variable (`d >= 1`), i.e. exactly one exponent is nonzero.
+pub fn Basis::pure_lead_degree(self : Basis) -> Int32 {
+  let mut m = 0
+  for g in self.gs {
+    let lm = g.lead_mono(self.order)
+    let mut nonzero = 0
+    for e in lm {
+      if e != 0 {
+        nonzero += 1
+      }
+    }
+    if nonzero == 1 {
+      let d = @poly.mono_total_degree(lm)
+      if d > m {
+        m = d
+      }
+    }
+  }
+  m
+}

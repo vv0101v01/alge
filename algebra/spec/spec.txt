@@ -1,0 +1,15 @@
+# spec for arena/algebra -- the compile-time input of the `gen` rules.
+#
+# two zero-dimensional systems over a finite field K = GF(p):
+#
+#  1. "cub" : K[x] / ((x-1)(x-2)(x-3))     p = 97, n = 1
+#             three reduced points; A is semisimple, A = K^3, so the
+#             primitive idempotents e_1, e_2, e_3 exist and sum to 1.
+#
+#  2. "fat" : K[x,y] / (x^2, xy, y^2)       p = 7, n = 2
+#             one non-reduced point at the origin; the maximal ideal
+#             m = (x,y) has m^2 = 0, edim = 2 > dim = 0, so the local ring
+#             is Artinian and NOT regular.
+#
+# term syntax inside the `gen` arguments:
+#   exponents "e0.e1...:coefficient", terms separated by '|', polynomials by ';'

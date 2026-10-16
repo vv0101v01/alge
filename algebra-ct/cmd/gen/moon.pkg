@@ -1,0 +1,12 @@
+import {
+  "arena/algebra-ct/poly",
+  "arena/algebra-ct/gb",
+  "arena/algebra-ct/quot",
+  "arena/algebra-ct/emit",
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "native"

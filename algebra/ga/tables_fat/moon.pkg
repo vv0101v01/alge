@@ -1,0 +1,4 @@
+import {
+}
+
+dev_build(rule: "gen-fat", input: "spec.txt", output: "tables.mbt")
