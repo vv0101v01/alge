@@ -21,5 +21,20 @@
 #             polynomial "2.0:1|0.0:-1"; splitting it into x^2 and -1 would
 #             generate the unit ideal (1) in F_2.
 #
+# categorified layer (T19): for each system `gen` also freezes the graded
+# objects themselves, not only their dimensions -- `hilbert` (Hilbert
+# function of A), `loewy` + `loewy_lens` (gr^i A_p = m^i/m^{i+1}, blocks
+# concatenated over the points) and `kozul` + `kozul_lens` (parameter
+# cohomology H^i of each A_p), with lengths NHILBERT/NLOEWY/NKOSZUL and
+# NPOINTS_CAT.  Their shapes are fixed by the ideals above:
+#
+#   cub : hilbert = loewy = kozul = [1,1,1]  (three etale factors, each K)
+#   fat : hilbert = [1,2],  loewy = [1,2],  kozul = [1,3,2]
+#   wild: hilbert = loewy = [1,2,1],  kozul = [1,3,3,1] = (1+t)^3
+#
+# and they satisfy sum(hilbert) = sum(loewy) = D, kozul[0] = 1, and
+# sum_{i>=1} of each Loewy block = dim m_p (RAD_DIM), last block entry =
+# dim soc A_p (SOCLE_DIM).  See ALGEBRA.md 2.13.
+#
 # term syntax inside the `gen` arguments:
 #   exponents "e0.e1...:coefficient", terms separated by '|', polynomials by ';'
