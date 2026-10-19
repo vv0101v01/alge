@@ -1,0 +1,4 @@
+import {
+}
+
+dev_build(rule: "gen-wild", input: "spec.txt", output: "tables.mbt")

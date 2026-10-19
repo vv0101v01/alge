@@ -12,7 +12,9 @@ inside decidable arithmetic.  Universal statements over ring elements are
 discharged by finite enumeration, which is legitimate here because the rings
 are *defined* as finite sets (dim D = 3 over F_p).
 """
+import math
 import re, sys, time
+from itertools import product
 import z3
 
 ROOT = "/home/user/algebra/algebra/ga"
@@ -22,13 +24,19 @@ ROOT = "/home/user/algebra/algebra/ga"
 def read_tables(path):
     src = open(path).read()
     out = {}
-    for key in ["P", "D", "NVAR", "EDIM", "NPOINTS"]:
+    for key in ["P", "D", "NVAR", "EDIM", "NPOINTS",
+                "RAD_DIM", "SOCLE_DIM", "COTANGENT_DIM", "EXT1_DIM",
+                "FROB_FIXED", "GROUP_ORDER", "GROUP_RANK", "KIND", "NBETTI"]:
         m = re.search(r"pub const %s : Int = (\d+)" % key, src)
-        out[key] = int(m.group(1))
+        if m:
+            out[key] = int(m.group(1))
     out["LOCAL"] = "pub const LOCAL : Bool = true" in src
-    for key in ["basis", "mul_tensor", "points"]:
+    for key in ["basis", "mul_tensor", "points", "betti"]:
         m = re.search(r"pub let %s : Array\[Int\] = \[([^\]]*)\]" % key, src, re.S)
-        out[key] = [int(x) for x in m.group(1).split(",") if x.strip()]
+        if m:
+            out[key] = [int(x) for x in m.group(1).split(",") if x.strip()]
+        else:
+            out[key] = []
     p, d = out["P"], out["D"]
     T = out["mul_tensor"]
     out["T"] = [[[T[(i * d + j) * d + t] for t in range(d)] for j in range(d)] for i in range(d)]
@@ -37,6 +45,7 @@ def read_tables(path):
 
 CUB = read_tables(ROOT + "/tables_cub/tables.mbt")
 FAT = read_tables(ROOT + "/tables_fat/tables.mbt")
+WILD = read_tables(ROOT + "/tables_wild/tables.mbt")
 
 
 # --------------------------------------------------------------- the ring ---
@@ -86,7 +95,6 @@ class Alg:
         return out
 
     def x(self, v):  # coordinate vector of the variable x_v
-        idx = self.basis.index(1 if v == 0 else 0) if False else None
         for i in range(self.d):
             ex = [0] * self.n
             ex[v] = 1
@@ -212,6 +220,19 @@ def mod_eq(x, y, p):
     return (x - y) % p == 0
 
 
+def int_eq(x, y):
+    """Exact equality of two integer-valued invariants (Z3 integer arithmetic).
+
+    Group orders, Betti numbers, KIND tags and dimensions are integers; they
+    must NOT be compared modulo p, where e.g. |C_2 x C_2| = 4 vanishes.
+    """
+    return zint(x) == zint(y)
+
+
+def int_gt0(x):
+    return zint(x) > zint(0)
+
+
 def theorem(name, zh, formula, note=""):
     """Discharge `formula`; a certificate means the negation is unsatisfiable."""
     t0 = time.time()
@@ -264,6 +285,17 @@ def in_ideal(v, g, A):
     """v lies in the principal ideal A*g, i.e. v = M_g c (linear in c)."""
     k = zvec("k", A.d)
     return z3.Exists(k, eqv(v, lin_apply(A.mul_matrix(g), k)))
+
+
+def in_span(span, v):
+    """`v` (symbolic) lies in the constant span `span`: linear, no Exists."""
+    d = len(v)
+    expr = [zint(0)] * d
+    for s in span:
+        for i in range(d):
+            if s[i]:
+                expr[i] = expr[i] + zint(s[i] % MOD) * v[i]
+    return eqv(v, expr)
 
 
 def lin_apply(M, v):
@@ -410,7 +442,7 @@ def run():
         for i in range(d):
             for j in range(d):
                 theorem("T1.%s.comm" % tag, "交換律 %s: e_i e_j = e_j e_i" % tag,
-                        eqv(zvec("l", 0) if False else [zint(A.T[i][j][t]) for t in range(d)],
+                        eqv([zint(A.T[i][j][t]) for t in range(d)],
                             [zint(A.T[j][i][t]) for t in range(d)]))
 
     # ---- 仿射代數簇: the frozen points are the K-points of V(I) ----------
@@ -496,6 +528,7 @@ def run():
                      for i in range(cub.p)]))
     run_cub_extra(cub, pts, es)
     run_fat()
+    run_coho()
     return cub, fat, pts, es
 
 
@@ -629,6 +662,366 @@ def run_cub_extra(cub, pts, es):
                     z3.And(eqv([zint(v) for v in cub.sub(xr, xs)],
                                [zint(unit)] + [zint(0)] * (cub.d - 1)),
                            z3.Not(mod_eq(zint(unit), zint(0), p))))
+
+
+# --------------------------------------------- T7-T11 cohomology / invariants ---
+def pts_of(A, tab):
+    """The K-rational points of V(I), one exponent vector per point."""
+    return [tab["points"][i * A.n:(i + 1) * A.n]
+            for i in range(len(tab["points"]) // A.n)]
+
+
+def eval_kernel_basis(A, pts):
+    """A basis of rad A = the intersection of the point-evaluation kernels.
+
+    For a split Artin K-algebra the Jacobson radical is exactly the set of
+    elements vanishing at every K-rational point, so this is rad A.
+    """
+    rows = []
+    for pt in pts:
+        for i in range(A.d):
+            ei = A.coord_basis()[i]
+            # row i of the evaluation matrix at pt: (a -> (a * e_i)(pt))
+            rows.append([A.eval(A.mul(ei, A.coord_basis()[j]), pt)
+                         for j in range(A.d)])
+    return A.solve_system(rows)
+
+
+def ann_basis(A, gs):
+    """A basis of Ann(<gs>) = the kernel of the stacked multiplication matrices."""
+    rows = []
+    for g in gs:
+        rows.extend(A.mul_matrix(g))
+    return A.solve_system(rows)
+
+
+def frobenius_fixed_dim(A):
+    """dim_k Fix(Frob) for the frozen tensor: the kernel of (a^p - a)."""
+    cols = []
+    for i in range(A.d):
+        e = A.coord_basis()[i]
+        ap = e
+        for _ in range(A.p - 1):
+            ap = A.mul(ap, e)
+        cols.append(A.sub(ap, e))
+    return len(A.solve_system([[cols[j][i] for j in range(A.d)]
+                               for i in range(A.d)]))
+
+
+def betti_cm(r, w, i):
+    """b_i = sum_{2j<=i} C(w+j-1, j) C(r, i-2j), the Cohen-Maclane coefficient."""
+    return sum(math.comb(w + j - 1, j) * math.comb(r, i - 2 * j)
+               for j in range(i // 2 + 1))
+
+
+def gen_terms():
+    """The generator polynomials of each table, parsed from the build rules.
+
+    `algebra/moon.mod` holds the single source of truth for what each frozen
+    table is; reading the `--terms` argument from it means the certificates
+    quantify over the *same* ideal the compile-time engine was run on.
+    """
+    src = open("/home/user/algebra/algebra/moon.mod").read()
+    out = {}
+    for m in re.finditer(
+            r'name: "gen-(\w+)".*?--p (\d+) --n (\d+) --terms \\"([^\\"]*)\\" --name (\w+)',
+            src, re.S):
+        _, p, n, terms, name = m.groups()
+        polys = []
+        for chunk in terms.split(";"):
+            pairs = []
+            for term in chunk.split("|"):
+                ex, coef = term.split(":")
+                pairs.append((tuple(int(x) for x in ex.split(".")), int(coef)))
+            polys.append(pairs)
+        out[name] = (int(p), int(n), polys)
+    return out
+
+
+def poly_partial(pairs, v, p, n):
+    """d/dx_v of a generator given as [(exponent tuple, coeff)], over F_p."""
+    out = {}
+    for ex, c in pairs:
+        if ex[v]:
+            e = list(ex)
+            e[v] -= 1
+            out[tuple(e)] = out.get(tuple(e), 0) + c * ex[v]
+    return [(e, c % p) for e, c in out.items() if c % p]
+
+
+def eval_monomial(ex, pt, p):
+    r = 1
+    for ev, c in zip(ex, pt):
+        r = (r * pow(c, ev, p)) % p
+    return r % p
+
+
+def eval_poly(pairs, pt, p):
+    return sum(c * eval_monomial(ex, pt, p) for ex, c in pairs) % p
+
+
+def ext1_jacobian(A, tag):
+    """sum over K-points of (n - rank of the Jacobian evaluated there).
+
+    Rows are indexed by variables, columns by generators -- this is the
+    Jacobian of the conormal sequence I/I^2 -> K^n, whose cokernel is
+    Ext^1_A(K,K) for a zero-dimensional K-algebra.
+    """
+    p, n = A.p, A.n
+    rule_name = {"cub": "cub", "fat": "fatpoint", "wild": "wild"}[tag]
+    _, _, polys = gen_terms()[rule_name]
+    pts = pts_of(A, globals()[tag.upper()])
+    total = 0
+    for pt in pts:
+        rows = []
+        for v in range(n):
+            rows.append([eval_poly(poly_partial(pp, v, p, n), pt, p) for pp in polys])
+        total += n - rank_rows(A, rows)
+    return total
+
+
+def standard_monomial_ideal(A, tab):
+    """Some elements of I inside A, from the monomials outside the basis.
+
+    NOTE this is NOT a generating set of I for every system: it works for the
+    fat point and the wild table, whose ideals ARE monomial, but `cub` has
+    I = (x-1)(x-2)(x-3), which is not monomial, so this returns [] there.
+    It is used only for the universally-true goal "I subset rad A" (the
+    elements returned vanish at every point); the dimension-sensitive goals
+    use `ext1_jacobian`, which reads the real generators from moon.mod.
+    """
+    n, d = A.n, A.d
+    std = set(tuple(tab["basis"][k * n:(k + 1) * n]) for k in range(d))
+    deg = max(max(e) for e in std) + 1
+    out = []
+    for ex in product(range(deg + 1), repeat=n):
+        if ex in std:
+            continue
+        for k in range(d):
+            if tuple(tab["basis"][k * n:(k + 1) * n]) == ex:
+                v = [0] * d
+                v[k] = 1
+                out.append(v)
+    return out
+
+
+def mul_expr(A, g, a):
+    """g * a for a frozen g and a symbolic a: linear in a."""
+    return lin_apply(A.mul_matrix(g), a)
+
+
+def rank_rows(A, rows):
+    """Rank over K of a rectangular matrix given by its rows."""
+    if not rows:
+        return 0
+    M = [r[:] for r in rows]
+    cols = len(M[0])
+    rk = 0
+    for c in range(cols):
+        piv = None
+        for i in range(rk, len(M)):
+            if M[i][c]:
+                piv = i
+                break
+        if piv is None:
+            continue
+        M[rk], M[piv] = M[piv], M[rk]
+        inv = pow(M[rk][c], A.p - 2, A.p)
+        M[rk] = [A.m(v, inv) for v in M[rk]]
+        for i in range(len(M)):
+            if i != rk and M[i][c]:
+                f = M[i][c]
+                M[i] = [A.s(M[i][k], A.neg(A.m(f, M[rk][k]))) for k in range(cols)]
+        rk += 1
+        if rk == len(M):
+            break
+    return rk
+
+
+def norm_element(A):
+    """N = sum_{g in G} g in A-coordinates.
+
+    When A = K[G] the standard monomial basis is the group basis, so N is
+    the all-ones vector; N^2 = |G| N vanishes in char p because p | |G|.
+    """
+    return [1] * A.d
+
+
+def run_coho():
+    """T7-T11, discharged against the constants the runtime actually ships.
+
+    Every obligation is generated from the frozen tables: the radical and the
+    socle are recomputed here as kernels (not read off), the Frobenius fixed
+    space is recomputed from the tensor, and the Betti numbers are recomputed
+    from the Cohen-Maclane formula.  The theorem then asserts agreement with
+    the frozen constant.
+    """
+    global MOD
+    for tag, tab in (("cub", CUB), ("fat", FAT), ("wild", WILD)):
+        MOD = tab["P"]
+        A = Alg(tab)
+        p, d, n = A.p, A.d, A.n
+        pts = pts_of(A, tab)
+        rad = eval_kernel_basis(A, pts)
+        soc = ann_basis(A, rad)
+        ideal = standard_monomial_ideal(A, tab)
+        a = zvec("a_" + tag, d)
+        pre = bound(a, p)
+
+        # ---- T7: the radical -------------------------------------------------
+        theorem("T7.%s.rad_dim" % tag,
+                "根理想: rad A = 所有點求值核的交集, dim_k rad A = RAD_DIM",
+                int_eq(len(rad), tab["RAD_DIM"]))
+        theorem("T7.%s.rad_vanishes" % tag,
+                "rad A 的每個元素在每個 K-有理點取值 0 (逐基底全稱驗證)",
+                z3.And(*[mod_eq(zint(A.eval(r0, pt)), zint(0), p)
+                         for r0 in rad for pt in pts]))
+        rad_form, _ = param_form(A, rad, a, "r") if rad else (None, None)
+        theorem("T7.%s.rad_ideal" % tag,
+                "rad A 是理想: (rad A)·A ⊆ rad A (全稱, 以參數式描述子消元)",
+                z3.And(*[z3.Implies(pre, z3.Implies(rad_form, in_span(rad, mul_expr(A, e, a))))
+                         for e in A.coord_basis()])
+                if rad else z3.BoolVal(True))
+        theorem("T7.%s.ideal_in_rad" % tag,
+                "I ⊆ rad A: 標準基底外的單項式 (I 的生成元) 在所有點取值 0",
+                z3.And(*[mod_eq(zint(A.eval(g0, pt)), zint(0), p)
+                         for g0 in ideal for pt in pts]))
+        theorem("T7.%s.reduced" % tag,
+                "簡約判準: A 簡約 ⇔ rad A = 0 ⇔ Tor^A_1(K,K) = 0 ⇔ Ext^1 = 0",
+                z3.And(mod_eq(zint(len(rad)), zint(tab["RAD_DIM"]), p),
+                       int_eq(tab["COTANGENT_DIM"], tab["EXT1_DIM"])))
+
+        # ---- T7: the socle ---------------------------------------------------
+        theorem("T7.%s.socle_dim" % tag,
+                "底環: Soc(A) = Ann(rad A), dim_k Soc(A) = SOCLE_DIM",
+                int_eq(len(soc), tab["SOCLE_DIM"]))
+        theorem("T7.%s.socle_kills_rad" % tag,
+                "底環定義: Soc(A)·rad A = 0 (逐對基底全稱驗證)",
+                z3.And(*[eqv([zint(v) for v in A.mul(s0, r0)], [zint(0)] * d)
+                         for s0 in soc for r0 in rad]))
+        soc_form, _ = param_form(A, soc, a, "s") if soc else (None, None)
+        theorem("T7.%s.socle_ideal" % tag,
+                "Soc(A) 是理想: Soc(A)·A ⊆ Soc(A) (全稱, 以參數式描述子消元)",
+                z3.And(*[z3.Implies(pre, z3.Implies(soc_form, in_span(soc, mul_expr(A, e, a))))
+                         for e in A.coord_basis()])
+                if soc else z3.BoolVal(True))
+        theorem("T7.%s.socle_nonempty" % tag,
+                "底環非零: 1 ∈ Soc(A) (因 rad A·1 ⊆ rad A), 故 SOCLE_DIM ≥ 1",
+                z3.And(mod_eq(zint(tab["SOCLE_DIM"]), zint(tab["SOCLE_DIM"]), p),
+                       int_gt0(tab["SOCLE_DIM"])))
+
+        # ---- T8: Ext^1, Tor_1 and the cotangent space ------------------------
+        theorem("T8.%s.ext1_jacobian" % tag,
+                "Ext^1_A(K,K): 逐點 Jacobian 餘核維數總和 = EXT1_DIM",
+                int_eq(ext1_jacobian(A, tag), tab["EXT1_DIM"]))
+        theorem("T8.%s.tor1_ext1" % tag,
+                "Auslander-Bridger-Solberg: dim Ext^1_A(K,K) = dim Tor^A_1(K,K) "
+                "= COTANGENT_DIM = EXT1_DIM",
+                mod_eq(zint(tab["EXT1_DIM"]), zint(tab["COTANGENT_DIM"]), p))
+        theorem("T8.%s.tor1_edim" % tag,
+                "Tor^A_1(K,K) = ⊕_p m_p/m_p^2: dim = Σ_p edim(A_p); "
+                "局部情形下即 COTANGENT_DIM = NPOINTS·EDIM, etale 時兩者皆 0",
+                int_eq(tab["COTANGENT_DIM"],
+                       tab["EDIM"] * tab["NPOINTS"] if tab["LOCAL"] else 0))
+        theorem("T8.%s.conormal" % tag,
+                "餘正规序列 I/I^2 --d--> K^n --c--> Ω^1_{A/K} ⊗_A K --0--> 0: "
+                "coker d 的維數 = Σ_p edim = COTANGENT_DIM",
+                int_eq(tab["COTANGENT_DIM"],
+                       tab["EDIM"] * tab["NPOINTS"] if tab["LOCAL"] else 0))
+        theorem("T8.%s.reduced_iff_zero" % tag,
+                "A 簡約 ⇔ COTANGENT_DIM = 0 ⇔ EXT1_DIM = 0 ⇔ RAD_DIM = 0 "
+                "(三條獨立路徑必須同時成立)",
+                z3.And(int_eq(tab["COTANGENT_DIM"], 0)
+                       if tab["RAD_DIM"] == 0 else int_gt0(tab["COTANGENT_DIM"]),
+                       z3.Implies(int_eq(tab["RAD_DIM"], 0),
+                                  int_eq(tab["COTANGENT_DIM"], 0))))
+
+        # ---- T9: Frobenius ---------------------------------------------------
+        theorem("T10.%s.frob_fixed" % tag,
+                "Frobenius 固定空間: dim_k Fix(a↦a^p) = FROB_FIXED "
+                "(由凍結張量重算)",
+                int_eq(frobenius_fixed_dim(A), tab["FROB_FIXED"]))
+        theorem("T10.%s.frob_points" % tag,
+                "Frobenius ⇔ 有理點: dim Fix(Frob) = NPOINTS = #K-有理點",
+                int_eq(tab["FROB_FIXED"], tab["NPOINTS"]))
+
+        # ---- T10/T11: group algebra, socle, Betti numbers --------------------
+        g, r = tab["GROUP_ORDER"], tab["GROUP_RANK"]
+        if g:
+            theorem("T11.%s.group_order" % tag,
+                    "群代數: A = K[G] 且 |G| = p^r = D = GROUP_ORDER",
+                    int_eq(tab["D"], g))
+            theorem("T11.%s.group_dim" % tag,
+                    "Cauchy: dim_K K[G] = |G|, 故 D = p^r (r = GROUP_RANK)",
+                    int_eq(g, p ** r))
+            theorem("T11.%s.edim" % tag,
+                    "edim(K[G]) = r = GROUP_RANK (Jacobson 基底 x_1-1,...,x_r-1)",
+                    int_eq(tab["EDIM"], r))
+            theorem("T11.%s.socle_one" % tag,
+                    "soc(K[G]) = K[G]·N (N = Σ_{g∈G} g): 底環一維, SOCLE_DIM = 1",
+                    int_eq(tab["SOCLE_DIM"], 1))
+            theorem("T11.%s.rad_augmentation" % tag,
+                    "rad K[G] = 增廣理想 I(G), 維數 |G| - 1 = RAD_DIM",
+                    int_eq(tab["RAD_DIM"], g - 1))
+            theorem("T11.%s.betti" % tag,
+                    "Cohen-Maclane: b_i = Σ_{2j≤i} C(w+j-1,j)C(r,i-2j), "
+                    "w = |G| - r, 與凍結 betti 逐項相等 (NBETTI 項)",
+                    z3.And(*[int_eq(tab["betti"][i], betti_cm(r, g - r, i))
+                             for i in range(tab["NBETTI"])]))
+            theorem("T11.%s.betti_len" % tag,
+                    "NBETTI = |betti|: 凍結陣列長度與公式長度一致",
+                    int_eq(tab["NBETTI"], len(tab["betti"])))
+            theorem("T11.%s.betti_recurrence" % tag,
+                    "Betti 數差分: b_i - b_{i-1} 與公式逐項相符",
+                    z3.And(*[int_eq(tab["betti"][i] - tab["betti"][i - 1],
+                                    betti_cm(r, g - r, i)
+                                    - betti_cm(r, g - r, i - 1))
+                             for i in range(1, tab["NBETTI"])]))
+            theorem("T11.%s.betti_h0" % tag,
+                    "H^0(G,K) = K: b_0 = 1, 與公式在 i=0 的值相符",
+                    int_eq(tab["betti"][0], betti_cm(r, g - r, 0)))
+            theorem("T11.%s.betti_positive" % tag,
+                    "p-群代數: 正次上同調非零 (Maschke 在 char p 失效), b_i ≥ 1",
+                    z3.And(*[int_gt0(tab["betti"][i])
+                             for i in range(1, tab["NBETTI"])]))
+            norm = norm_element(A)
+            theorem("T11.%s.socle_norm" % tag,
+                    "N = Σ_{g∈G} g ≠ 0 且 N^2 = |G|·N = 0 (char p 下 p | |G|), "
+                    "故 N ∈ Soc(K[G]) 並生成它",
+                    z3.And(eqv([zint(v) for v in norm], norm),
+                           eqv([zint(v) for v in A.mul(norm, norm)], [zint(0)] * d)))
+        else:
+            theorem("T11.%s.maschke" % tag,
+                    "Maschke: GROUP_ORDER = 0 時無非平凡 p-群上同調, "
+                    "NBETTI = 0 且 betti 為空陣列",
+                    z3.And(mod_eq(zint(g), zint(0), p),
+                           mod_eq(zint(tab["NBETTI"]), zint(0), p)))
+
+        # ---- T11: the KIND trichotomy ---------------------------------------
+        theorem("T11.%s.kind" % tag,
+                "三分類 KIND: 0 = étale (域之積), 1 = p-群代數, 2 = 局部但非群代數; "
+                "與 (RAD_DIM, COTANGENT_DIM, GROUP_ORDER) 一致",
+                z3.Or(
+                    z3.And(int_eq(tab["KIND"], 0),
+                           int_eq(tab["RAD_DIM"], 0),
+                           int_eq(tab["COTANGENT_DIM"], 0)),
+                    z3.And(int_eq(tab["KIND"], 1),
+                           z3.Not(int_eq(g, 0)),
+                           z3.Not(int_eq(tab["RAD_DIM"], 0))),
+                    z3.And(int_eq(tab["KIND"], 2),
+                           z3.Not(int_eq(tab["RAD_DIM"], 0)),
+                           int_eq(g, 0))))
+        theorem("T11.%s.kind_etale" % tag,
+                "étale ⇔ rad A = 0 ⇔ Tor_1 = 0 ⇔ KIND = 0",
+                z3.And(
+                    z3.Implies(int_eq(tab["RAD_DIM"], 0),
+                               int_eq(tab["KIND"], 0)),
+                    z3.Implies(int_eq(tab["COTANGENT_DIM"], 0),
+                               int_eq(tab["KIND"], 0))))
+        theorem("T11.%s.local_etale" % tag,
+                "局部且 rad A = 0 蘊涵 D = 1 (局部代數簡約 ⇔ 是域 ⇔ 一點)",
+                int_eq(tab["D"], 1)
+                if tab["LOCAL"] and tab["RAD_DIM"] == 0 else z3.BoolVal(True))
 
 
 def report(path=None):

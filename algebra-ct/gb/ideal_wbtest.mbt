@@ -12,6 +12,11 @@ fn k97() -> Fp {
 }
 
 ///|
+fn k2() -> Fp {
+  Fp::new(2)
+}
+
+///|
 fn univ(k : Fp, terms : Array[MTerm]) -> Poly {
   Poly::from_pairs(k, 1, terms)
 }
@@ -429,4 +434,53 @@ test "ideal_saturate implements I : g^omega" {
     Lex,
   )
   assert_true(y2.contains(x.add_const_public(6)))
+}
+
+///|
+test "nullspace back-substitutes along the pivot rows, not the discovery order" {
+  let k = k2()
+  // x + y + z = 0, x + y + w = 0 over F_2: the kernel is spanned by
+  // (1,1,0,0) and (0,0,1,1).  Row 2 is zero, so a back-substitution that
+  // indexed rows by *pivot discovery order* would read row 1 (the zero row)
+  // instead of row 2 and return a wrong basis vector -- the regression this
+  // test pins down.
+  let m : Array[Array[Int32]] = [[1, 1, 1, 0], [0, 0, 0, 0], [1, 1, 0, 1]]
+  let ker = nullspace(k, m, 4)
+  assert_eq(ker.length(), 2)
+  // every basis vector is a solution, and two independent solutions in a
+  // 2-dimensional kernel already span it
+  for v in ker {
+    for row in m {
+      let mut acc = 0
+      let mut i = 0
+      while i < 4 {
+        acc = (acc + row[i] * v[i]) % 2
+        i += 1
+      }
+      assert_eq(acc, 0)
+    }
+  }
+  assert_true(
+    ker[0][0] != ker[1][0] ||
+    ker[0][1] != ker[1][1] ||
+    ker[0][2] != ker[1][2] ||
+    ker[0][3] != ker[1][3],
+  )
+  assert_eq(ker[0], [1, 1, 0, 0])
+  // the same shape in F_97 with non-unit leading coefficients
+  let k97 = k97()
+  let m2 : Array[Array[Int32]] = [[2, 4, 0, 0], [0, 0, 0, 0], [0, 0, 3, 6]]
+  let ker2 = nullspace(k97, m2, 4)
+  assert_eq(ker2.length(), 2)
+  for v in ker2 {
+    for row in m2 {
+      let mut acc = 0
+      let mut i = 0
+      while i < 4 {
+        acc = (acc + row[i] * v[i]) % 97
+        i += 1
+      }
+      assert_eq(acc, 0)
+    }
+  }
 }

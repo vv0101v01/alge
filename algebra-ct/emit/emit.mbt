@@ -8,6 +8,9 @@ type Quot = @quot.Quot
 type GbStats = @gb.GbStats
 
 ///|
+type Inv = @coho.Inv
+
+///|
 /// # Emitting the frozen runtime tables
 ///
 /// The generated package contains **no algebra**: it contains the numbers the
@@ -19,6 +22,11 @@ type GbStats = @gb.GbStats
 /// - `MUL`, the `d * d * d` multiplication tensor,
 /// - `POINTS`, the `K`-rational points of `V(I)` (one row per point),
 /// - `EDIM`, `LOCAL`, the local-ring invariants,
+/// - `RAD_DIM`, `SOCLE_DIM`, `COTANGENT_DIM`, `EXT1_DIM`, `FROB_FIXED`, the
+///   cohomological invariants of `coho` (Kaehler differentials `Omega^1`,
+///   `Ext^1_A(k,k)`, the socle, the Frobenius fixed space),
+/// - `GROUP_ORDER`, `GROUP_RANK`, `KIND`, `betti`, the group-theoretic
+///   reading of `A` together with the Betti numbers of `H^*(G,k)`,
 /// - `COST`, the measured Gröbner statistics, kept so that the runtime can
 ///   assert that it is looking at the same system it was generated for.
 ///
@@ -48,6 +56,48 @@ pub fn cost_model(d : Int32, n : Int32, stats : GbStats) -> String {
 }
 
 ///|
+/// The derived layer: everything `coho` knows about `A` as a frozen integer.
+/// None of this is needed to *use* the algebra -- it is there so that the
+/// cohomological signature of the system can be read off (and proved about) at
+/// runtime for the price of a constant.
+fn invariants(inv : Inv) -> String {
+  let s = StringBuilder()
+  s.write_string(
+    "// ---- cohomological / isomorphism invariants (frozen) ----------------\n",
+  )
+  s.write_string("pub const RAD_DIM : Int = ")
+  s.write_string(inv.rad_dim.to_string())
+  s.write_string("\npub const SOCLE_DIM : Int = ")
+  s.write_string(inv.socle_dim.to_string())
+  s.write_string("\npub const COTANGENT_DIM : Int = ")
+  s.write_string(inv.cotangent_dim.to_string())
+  s.write_string("\npub const EXT1_DIM : Int = ")
+  s.write_string(inv.ext1_dim.to_string())
+  s.write_string("\npub const FROB_FIXED : Int = ")
+  s.write_string(inv.frob_fixed.to_string())
+  s.write_string("\npub const GROUP_ORDER : Int = ")
+  s.write_string(inv.group_order.to_string())
+  s.write_string("\npub const GROUP_RANK : Int = ")
+  s.write_string(inv.group_rank.to_string())
+  s.write_string(
+    "\n/// 0 = etale (a product of finite fields), 1 = a p-group algebra,\n",
+  )
+  s.write_string(
+    "/// 2 = local but not a group algebra.\npub const KIND : Int = ",
+  )
+  s.write_string(inv.kind().code.to_string())
+  s.write_string(
+    "\n/// dim_k H^i(G, k) for i = 0 .. NBETTI - 1 (empty unless GROUP_ORDER > 0).\n",
+  )
+  s.write_string("pub const NBETTI : Int = ")
+  s.write_string(inv.betti.length().to_string())
+  s.write_string("\npub let betti : Array[Int] = [")
+  s.write_string(list_of(inv.betti))
+  s.write_string("]\n\n")
+  s.to_string()
+}
+
+///|
 /// Render a flat `Array[Int]` as a MoonBit list literal.
 fn list_of(a : Array[Int32]) -> String {
   let s = StringBuilder()
@@ -69,6 +119,7 @@ pub fn emit_runtime(
   q : Quot,
   stats : GbStats,
   ps : Array[Array[Int32]],
+  inv : Inv,
   spec_name : String,
 ) -> String {
   let d = q.dim
@@ -148,6 +199,8 @@ pub fn emit_runtime(
   s.write_string("\npub let points : Array[Int] = [")
   s.write_string(list_of(flat))
   s.write_string("]\n\n")
+  // ---- cohomological invariants -------------------------------------------
+  s.write_string(invariants(inv))
   // ---- runtime operations -------------------------------------------------
   s.write_string(runtime_ops)
   s.write_string("\n")

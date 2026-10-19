@@ -56,5 +56,75 @@
 | 52 | 連續模/精確序列: 0 -> xA -> A -> A/xA -> 0 精確 (ker q = xA) `T6.exact_xA` | 1 | 1 | PASS |
 | 53 | 連續模/精確序列: 0 -> yA -> A -> A/yA -> 0 精確 (ker q = yA) `T6.exact_yA` | 1 | 1 | PASS |
 | 54 | 凝聚性: dim_k A = 3 有限, 故 A 同時是 Artin 與 Noetherian, Spec A 上的層凝聚 `T6.artinian_noetherian` | 1 | 1 | PASS |
+| 55 | 根理想: rad A = 所有點求值核的交集, dim_k rad A = RAD_DIM `T7.cub.rad_dim` | 1 | 1 | PASS |
+| 56 | rad A 的每個元素在每個 K-有理點取值 0 (逐基底全稱驗證) `T7.cub.rad_vanishes` | 1 | 1 | PASS |
+| 57 | rad A 是理想: (rad A)·A ⊆ rad A (全稱, 以參數式描述子消元) `T7.cub.rad_ideal` | 1 | 1 | PASS |
+| 58 | I ⊆ rad A: 標準基底外的單項式 (I 的生成元) 在所有點取值 0 `T7.cub.ideal_in_rad` | 1 | 1 | PASS |
+| 59 | 簡約判準: A 簡約 ⇔ rad A = 0 ⇔ Tor^A_1(K,K) = 0 ⇔ Ext^1 = 0 `T7.cub.reduced` | 1 | 1 | PASS |
+| 60 | 底環: Soc(A) = Ann(rad A), dim_k Soc(A) = SOCLE_DIM `T7.cub.socle_dim` | 1 | 1 | PASS |
+| 61 | 底環定義: Soc(A)·rad A = 0 (逐對基底全稱驗證) `T7.cub.socle_kills_rad` | 1 | 1 | PASS |
+| 62 | Soc(A) 是理想: Soc(A)·A ⊆ Soc(A) (全稱, 以參數式描述子消元) `T7.cub.socle_ideal` | 1 | 1 | PASS |
+| 63 | 底環非零: 1 ∈ Soc(A) (因 rad A·1 ⊆ rad A), 故 SOCLE_DIM ≥ 1 `T7.cub.socle_nonempty` | 1 | 1 | PASS |
+| 64 | Ext^1_A(K,K): 逐點 Jacobian 餘核維數總和 = EXT1_DIM `T8.cub.ext1_jacobian` | 1 | 1 | PASS |
+| 65 | Auslander-Bridger-Solberg: dim Ext^1_A(K,K) = dim Tor^A_1(K,K) = COTANGENT_DIM = EXT1_DIM `T8.cub.tor1_ext1` | 1 | 1 | PASS |
+| 66 | Tor^A_1(K,K) = ⊕_p m_p/m_p^2: dim = Σ_p edim(A_p); 局部情形下即 COTANGENT_DIM = NPOINTS·EDIM, etale 時兩者皆 0 `T8.cub.tor1_edim` | 1 | 1 | PASS |
+| 67 | 餘正规序列 I/I^2 --d--> K^n --c--> Ω^1_{A/K} ⊗_A K --0--> 0: coker d 的維數 = Σ_p edim = COTANGENT_DIM `T8.cub.conormal` | 1 | 1 | PASS |
+| 68 | A 簡約 ⇔ COTANGENT_DIM = 0 ⇔ EXT1_DIM = 0 ⇔ RAD_DIM = 0 (三條獨立路徑必須同時成立) `T8.cub.reduced_iff_zero` | 1 | 1 | PASS |
+| 69 | Frobenius 固定空間: dim_k Fix(a↦a^p) = FROB_FIXED (由凍結張量重算) `T10.cub.frob_fixed` | 1 | 1 | PASS |
+| 70 | Frobenius ⇔ 有理點: dim Fix(Frob) = NPOINTS = #K-有理點 `T10.cub.frob_points` | 1 | 1 | PASS |
+| 71 | Maschke: GROUP_ORDER = 0 時無非平凡 p-群上同調, NBETTI = 0 且 betti 為空陣列 `T11.cub.maschke` | 1 | 1 | PASS |
+| 72 | 三分類 KIND: 0 = étale (域之積), 1 = p-群代數, 2 = 局部但非群代數; 與 (RAD_DIM, COTANGENT_DIM, GROUP_ORDER) 一致 `T11.cub.kind` | 1 | 1 | PASS |
+| 73 | étale ⇔ rad A = 0 ⇔ Tor_1 = 0 ⇔ KIND = 0 `T11.cub.kind_etale` | 1 | 1 | PASS |
+| 74 | 局部且 rad A = 0 蘊涵 D = 1 (局部代數簡約 ⇔ 是域 ⇔ 一點) `T11.cub.local_etale` | 1 | 1 | PASS |
+| 75 | 根理想: rad A = 所有點求值核的交集, dim_k rad A = RAD_DIM `T7.fat.rad_dim` | 1 | 1 | PASS |
+| 76 | rad A 的每個元素在每個 K-有理點取值 0 (逐基底全稱驗證) `T7.fat.rad_vanishes` | 1 | 1 | PASS |
+| 77 | rad A 是理想: (rad A)·A ⊆ rad A (全稱, 以參數式描述子消元) `T7.fat.rad_ideal` | 1 | 1 | PASS |
+| 78 | I ⊆ rad A: 標準基底外的單項式 (I 的生成元) 在所有點取值 0 `T7.fat.ideal_in_rad` | 1 | 1 | PASS |
+| 79 | 簡約判準: A 簡約 ⇔ rad A = 0 ⇔ Tor^A_1(K,K) = 0 ⇔ Ext^1 = 0 `T7.fat.reduced` | 1 | 1 | PASS |
+| 80 | 底環: Soc(A) = Ann(rad A), dim_k Soc(A) = SOCLE_DIM `T7.fat.socle_dim` | 1 | 1 | PASS |
+| 81 | 底環定義: Soc(A)·rad A = 0 (逐對基底全稱驗證) `T7.fat.socle_kills_rad` | 1 | 1 | PASS |
+| 82 | Soc(A) 是理想: Soc(A)·A ⊆ Soc(A) (全稱, 以參數式描述子消元) `T7.fat.socle_ideal` | 1 | 1 | PASS |
+| 83 | 底環非零: 1 ∈ Soc(A) (因 rad A·1 ⊆ rad A), 故 SOCLE_DIM ≥ 1 `T7.fat.socle_nonempty` | 1 | 1 | PASS |
+| 84 | Ext^1_A(K,K): 逐點 Jacobian 餘核維數總和 = EXT1_DIM `T8.fat.ext1_jacobian` | 1 | 1 | PASS |
+| 85 | Auslander-Bridger-Solberg: dim Ext^1_A(K,K) = dim Tor^A_1(K,K) = COTANGENT_DIM = EXT1_DIM `T8.fat.tor1_ext1` | 1 | 1 | PASS |
+| 86 | Tor^A_1(K,K) = ⊕_p m_p/m_p^2: dim = Σ_p edim(A_p); 局部情形下即 COTANGENT_DIM = NPOINTS·EDIM, etale 時兩者皆 0 `T8.fat.tor1_edim` | 1 | 1 | PASS |
+| 87 | 餘正规序列 I/I^2 --d--> K^n --c--> Ω^1_{A/K} ⊗_A K --0--> 0: coker d 的維數 = Σ_p edim = COTANGENT_DIM `T8.fat.conormal` | 1 | 1 | PASS |
+| 88 | A 簡約 ⇔ COTANGENT_DIM = 0 ⇔ EXT1_DIM = 0 ⇔ RAD_DIM = 0 (三條獨立路徑必須同時成立) `T8.fat.reduced_iff_zero` | 1 | 1 | PASS |
+| 89 | Frobenius 固定空間: dim_k Fix(a↦a^p) = FROB_FIXED (由凍結張量重算) `T10.fat.frob_fixed` | 1 | 1 | PASS |
+| 90 | Frobenius ⇔ 有理點: dim Fix(Frob) = NPOINTS = #K-有理點 `T10.fat.frob_points` | 1 | 1 | PASS |
+| 91 | Maschke: GROUP_ORDER = 0 時無非平凡 p-群上同調, NBETTI = 0 且 betti 為空陣列 `T11.fat.maschke` | 1 | 1 | PASS |
+| 92 | 三分類 KIND: 0 = étale (域之積), 1 = p-群代數, 2 = 局部但非群代數; 與 (RAD_DIM, COTANGENT_DIM, GROUP_ORDER) 一致 `T11.fat.kind` | 1 | 1 | PASS |
+| 93 | étale ⇔ rad A = 0 ⇔ Tor_1 = 0 ⇔ KIND = 0 `T11.fat.kind_etale` | 1 | 1 | PASS |
+| 94 | 局部且 rad A = 0 蘊涵 D = 1 (局部代數簡約 ⇔ 是域 ⇔ 一點) `T11.fat.local_etale` | 1 | 1 | PASS |
+| 95 | 根理想: rad A = 所有點求值核的交集, dim_k rad A = RAD_DIM `T7.wild.rad_dim` | 1 | 1 | PASS |
+| 96 | rad A 的每個元素在每個 K-有理點取值 0 (逐基底全稱驗證) `T7.wild.rad_vanishes` | 1 | 1 | PASS |
+| 97 | rad A 是理想: (rad A)·A ⊆ rad A (全稱, 以參數式描述子消元) `T7.wild.rad_ideal` | 1 | 1 | PASS |
+| 98 | I ⊆ rad A: 標準基底外的單項式 (I 的生成元) 在所有點取值 0 `T7.wild.ideal_in_rad` | 1 | 1 | PASS |
+| 99 | 簡約判準: A 簡約 ⇔ rad A = 0 ⇔ Tor^A_1(K,K) = 0 ⇔ Ext^1 = 0 `T7.wild.reduced` | 1 | 1 | PASS |
+| 100 | 底環: Soc(A) = Ann(rad A), dim_k Soc(A) = SOCLE_DIM `T7.wild.socle_dim` | 1 | 1 | PASS |
+| 101 | 底環定義: Soc(A)·rad A = 0 (逐對基底全稱驗證) `T7.wild.socle_kills_rad` | 1 | 1 | PASS |
+| 102 | Soc(A) 是理想: Soc(A)·A ⊆ Soc(A) (全稱, 以參數式描述子消元) `T7.wild.socle_ideal` | 1 | 1 | PASS |
+| 103 | 底環非零: 1 ∈ Soc(A) (因 rad A·1 ⊆ rad A), 故 SOCLE_DIM ≥ 1 `T7.wild.socle_nonempty` | 1 | 1 | PASS |
+| 104 | Ext^1_A(K,K): 逐點 Jacobian 餘核維數總和 = EXT1_DIM `T8.wild.ext1_jacobian` | 1 | 1 | PASS |
+| 105 | Auslander-Bridger-Solberg: dim Ext^1_A(K,K) = dim Tor^A_1(K,K) = COTANGENT_DIM = EXT1_DIM `T8.wild.tor1_ext1` | 1 | 1 | PASS |
+| 106 | Tor^A_1(K,K) = ⊕_p m_p/m_p^2: dim = Σ_p edim(A_p); 局部情形下即 COTANGENT_DIM = NPOINTS·EDIM, etale 時兩者皆 0 `T8.wild.tor1_edim` | 1 | 1 | PASS |
+| 107 | 餘正规序列 I/I^2 --d--> K^n --c--> Ω^1_{A/K} ⊗_A K --0--> 0: coker d 的維數 = Σ_p edim = COTANGENT_DIM `T8.wild.conormal` | 1 | 1 | PASS |
+| 108 | A 簡約 ⇔ COTANGENT_DIM = 0 ⇔ EXT1_DIM = 0 ⇔ RAD_DIM = 0 (三條獨立路徑必須同時成立) `T8.wild.reduced_iff_zero` | 1 | 1 | PASS |
+| 109 | Frobenius 固定空間: dim_k Fix(a↦a^p) = FROB_FIXED (由凍結張量重算) `T10.wild.frob_fixed` | 1 | 1 | PASS |
+| 110 | Frobenius ⇔ 有理點: dim Fix(Frob) = NPOINTS = #K-有理點 `T10.wild.frob_points` | 1 | 1 | PASS |
+| 111 | 群代數: A = K[G] 且 |G| = p^r = D = GROUP_ORDER `T11.wild.group_order` | 1 | 1 | PASS |
+| 112 | Cauchy: dim_K K[G] = |G|, 故 D = p^r (r = GROUP_RANK) `T11.wild.group_dim` | 1 | 1 | PASS |
+| 113 | edim(K[G]) = r = GROUP_RANK (Jacobson 基底 x_1-1,...,x_r-1) `T11.wild.edim` | 1 | 1 | PASS |
+| 114 | soc(K[G]) = K[G]·N (N = Σ_{g∈G} g): 底環一維, SOCLE_DIM = 1 `T11.wild.socle_one` | 1 | 1 | PASS |
+| 115 | rad K[G] = 增廣理想 I(G), 維數 |G| - 1 = RAD_DIM `T11.wild.rad_augmentation` | 1 | 1 | PASS |
+| 116 | Cohen-Maclane: b_i = Σ_{2j≤i} C(w+j-1,j)C(r,i-2j), w = |G| - r, 與凍結 betti 逐項相等 (NBETTI 項) `T11.wild.betti` | 1 | 1 | PASS |
+| 117 | NBETTI = |betti|: 凍結陣列長度與公式長度一致 `T11.wild.betti_len` | 1 | 1 | PASS |
+| 118 | Betti 數差分: b_i - b_{i-1} 與公式逐項相符 `T11.wild.betti_recurrence` | 1 | 1 | PASS |
+| 119 | H^0(G,K) = K: b_0 = 1, 與公式在 i=0 的值相符 `T11.wild.betti_h0` | 1 | 1 | PASS |
+| 120 | p-群代數: 正次上同調非零 (Maschke 在 char p 失效), b_i ≥ 1 `T11.wild.betti_positive` | 1 | 1 | PASS |
+| 121 | N = Σ_{g∈G} g ≠ 0 且 N^2 = |G|·N = 0 (char p 下 p | |G|), 故 N ∈ Soc(K[G]) 並生成它 `T11.wild.socle_norm` | 1 | 1 | PASS |
+| 122 | 三分類 KIND: 0 = étale (域之積), 1 = p-群代數, 2 = 局部但非群代數; 與 (RAD_DIM, COTANGENT_DIM, GROUP_ORDER) 一致 `T11.wild.kind` | 1 | 1 | PASS |
+| 123 | étale ⇔ rad A = 0 ⇔ Tor_1 = 0 ⇔ KIND = 0 `T11.wild.kind_etale` | 1 | 1 | PASS |
+| 124 | 局部且 rad A = 0 蘊涵 D = 1 (局部代數簡約 ⇔ 是域 ⇔ 一點) `T11.wild.local_etale` | 1 | 1 | PASS |
 
-**合計 goals = 265，已由 Z3 證明 = 265，失敗 = 0**
+**合計 goals = 335，已由 Z3 證明 = 335，失敗 = 0**

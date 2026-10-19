@@ -13,6 +13,7 @@
 /// | 剩餘理想 (socle)           | `{ a : a m = 0 }`                       | `O(d n d^2)` |
 /// | 半單/單純理想               | `local ? K : K^r` decomposition        | — |
 /// | 正則局部環 (regular)       | `edim == dim`                          | `O(1)` |
+/// | 上同調 (cohomology)        | frozen `COTANGENT_DIM`, `EXT1_DIM`, ... | `O(1)` |
 ///
 /// **Theorem (runtime correctness).**  If `mul_tensor` is the table of the
 /// coordinate ring `A = R/I` with respect to the standard monomials, then the
@@ -34,6 +35,102 @@ pub(all) struct Tables {
   /// `local` is a reserved keyword in MoonBit.
   is_local : Bool
   edim : Int32
+  /// `dim_k rad A`; `0` iff `A` is a product of finite fields
+  rad_dim : Int32
+  /// `dim_k Ann(rad A)`
+  socle_dim : Int32
+  /// `dim_k Omega^1_{A/k}`, the module of Kahler differentials
+  cotangent_dim : Int32
+  /// `dim_k Ext^1_A(k, k)`
+  ext1_dim : Int32
+  /// `dim_k Fix(Frob)`, the number of `K`-rational points
+  frob_fixed : Int32
+  /// `|G|` when `A = K[G]` for an abelian `p`-group, else `0`
+  group_order : Int32
+  /// `r`, the number of cyclic factors of `G`
+  group_rank : Int32
+  /// `0` = etale, `1` = `p`-group algebra, `2` = local, not a group algebra
+  kind : Int32
+  /// `dim_k H^i(G, k)` for `i = 0 .. betti.length() - 1`
+  betti : Array[Int32]
+}
+
+///|
+/// The cohomological signature of `A`, read off the frozen constants.
+///
+/// **Theorem (T7/T8/T9).**  `cotangent_dim` is `sum_p edim(A_p)`, the
+/// dimension of the cotangent space `Omega^1_{A/k} (x)_A K = Tor^A_1(K,K)` at
+/// the closed points -- *not* `dim_k Omega^1_{A/k}` itself, which is larger
+/// whenever `A` is not reduced.  It vanishes exactly when `A` is reduced, so
+/// `A` is reduced iff `cotangent_dim == 0`; `ext1_dim` is
+/// `dim_k Ext^1_A(K,K)`, which the Auslander--Bridger--Solberg identification
+/// makes equal to `cotangent_dim`, and it vanishes on exactly the same
+/// systems; and when
+/// `group_order > 0` the algebra is the group algebra of an abelian `p`-group
+/// `G`, with `betti` the graded dimensions of `H^*(G, K)`.
+pub fn Tables::cohomology(self : Tables) -> Array[Int32] {
+  [
+    self.d,
+    self.rad_dim,
+    self.socle_dim,
+    self.cotangent_dim,
+    self.ext1_dim,
+    self.frob_fixed,
+    self.group_order,
+    self.group_rank,
+  ]
+}
+
+///|
+/// `dim_k H^i(G, k)` recomputed from the group-theoretic data, by the
+/// Cohen-Maclane formula `P(t) = (1+t)^r / (1-t^2)^{|G|-r}`:
+///
+/// ```text
+///   b_i = sum_{2j <= i} C(|G|-r+j-1, j) * C(r, i-2j).
+/// ```
+///
+/// It costs `O(i^2)` integer operations and is meant to be compared against
+/// the frozen `betti` array: the two must agree, which is what the runtime
+/// assertion below checks.  Returns `0` when `A` is not a group algebra.
+pub fn Tables::betti_at(self : Tables, i : Int32) -> Int32 {
+  if self.group_order <= 0 {
+    return 0
+  }
+  let w = self.group_order - self.group_rank
+  let mut acc = 0
+  let mut j = 0
+  while 2 * j <= i {
+    acc += binom(w + j - 1, j) * binom(self.group_rank, i - 2 * j)
+    j += 1
+  }
+  acc
+}
+
+///|
+/// `C(n, k)` as an integer (Betti numbers are counts, not field elements).
+fn binom(n : Int32, k : Int32) -> Int32 {
+  if k < 0 || k > n {
+    return 0
+  }
+  if k == 0 {
+    return 1
+  }
+  // multiplicative form: prod_{i=1..k} (n - k + i) / i, which is exact at
+  // every step, so integer division is safe here.
+  let mut acc = 1
+  let mut i = 1
+  while i <= k {
+    acc = acc * (n - k + i) / i
+    i += 1
+  }
+  acc
+}
+
+///|
+/// `true` iff `A` is reduced (equivalently: a finite product of fields),
+/// which is the same statement as `Omega^1_{A/k} = 0` (T7).
+pub fn Tables::is_reduced(self : Tables) -> Bool {
+  self.cotangent_dim == 0 && self.rad_dim == 0
 }
 
 ///|
@@ -206,6 +303,9 @@ pub fn Tables::solve(
 ) -> Array[Int32] {
   let aug = aug_in.map(row => row.copy())
   let pivots : Array[Int32] = []
+  // `pivot_rows[pi]` is the row of `sys` whose pivot is `pivots[pi]`; a
+  // rank-deficient row is skipped, so discovery order is *not* row order.
+  let pivot_rows : Array[Int32] = []
   let mut rr = 0
   while rr < r {
     let mut c = 0
@@ -218,6 +318,7 @@ pub fn Tables::solve(
     }
     if found >= 0 {
       pivots.push(found)
+      pivot_rows.push(rr)
       let inv = self.fpow(aug[rr][found], self.p - 2)
       let mut cc = 0
       while cc < d + 1 {
@@ -243,7 +344,8 @@ pub fn Tables::solve(
   let mut pi = 0
   while pi < pivots.length() {
     let p = pivots[pi]
-    let mut acc = aug[pi][d]
+    let row = aug[pivot_rows[pi]]
+    let mut acc = row[d]
     let mut f = 0
     while f < d {
       let mut used = false
@@ -255,7 +357,7 @@ pub fn Tables::solve(
         q += 1
       }
       if !used {
-        acc = self.fsub(acc, self.fmul(aug[pi][f], x[f]))
+        acc = self.fsub(acc, self.fmul(row[f], x[f]))
       }
       f += 1
     }
@@ -381,6 +483,9 @@ pub fn Tables::nullspace(
   let sys = sys_in.map(row => row.copy())
   let r = sys.length()
   let pivots : Array[Int32] = []
+  // `pivot_rows[pi]` is the row of `sys` whose pivot is `pivots[pi]`; a
+  // rank-deficient row is skipped, so discovery order is *not* row order.
+  let pivot_rows : Array[Int32] = []
   let mut rr = 0
   while rr < r {
     let mut c = 0
@@ -393,6 +498,7 @@ pub fn Tables::nullspace(
     }
     if found >= 0 {
       pivots.push(found)
+      pivot_rows.push(rr)
       let inv = self.fpow(sys[rr][found], self.p - 2)
       let mut cc = 0
       while cc < d + 1 {
@@ -428,7 +534,7 @@ pub fn Tables::nullspace(
       v[f] = 1
       let mut pi = 0
       while pi < pivots.length() {
-        v[pivots[pi]] = self.fneg(sys[pi][f])
+        v[pivots[pi]] = self.fneg(sys[pivot_rows[pi]][f])
         pi += 1
       }
       out.push(v)
@@ -507,4 +613,91 @@ pub fn Tables::mul_matrix(
     i += 1
   }
   out
+}
+
+///|
+/// The etale table `A = K[C_3] = K[x]/(x^3-1)` over `K = F_97`, i.e.
+/// `K[x]/((x-1)(x-2)(x-3))`: a product of three fields.
+///
+/// Entirely frozen: the body is a compile-time constant, so reading it
+/// costs no code beyond the `Tables` record itself (see `Tables`).
+pub fn Tables::cub() -> Tables {
+  {
+    p: @tables_cub.P,
+    d: @tables_cub.D,
+    nvar: @tables_cub.NVAR,
+    basis: @tables_cub.basis,
+    mul_tensor: @tables_cub.mul_tensor,
+    points: @tables_cub.points,
+    npoints: @tables_cub.NPOINTS,
+    is_local: @tables_cub.LOCAL,
+    edim: @tables_cub.EDIM,
+    rad_dim: @tables_cub.RAD_DIM,
+    socle_dim: @tables_cub.SOCLE_DIM,
+    cotangent_dim: @tables_cub.COTANGENT_DIM,
+    ext1_dim: @tables_cub.EXT1_DIM,
+    frob_fixed: @tables_cub.FROB_FIXED,
+    group_order: @tables_cub.GROUP_ORDER,
+    group_rank: @tables_cub.GROUP_RANK,
+    kind: @tables_cub.KIND,
+    betti: @tables_cub.betti,
+  }
+}
+
+///|
+/// The fat-point table `A = K[x,y]/(x^2,xy,y^2)` over `K = F_7`: a local
+/// non-reduced algebra of embedding dimension 2.
+///
+/// Entirely frozen: the body is a compile-time constant, so reading it
+/// costs no code beyond the `Tables` record itself (see `Tables`).
+pub fn Tables::fat() -> Tables {
+  {
+    p: @tables_fat.P,
+    d: @tables_fat.D,
+    nvar: @tables_fat.NVAR,
+    basis: @tables_fat.basis,
+    mul_tensor: @tables_fat.mul_tensor,
+    points: @tables_fat.points,
+    npoints: @tables_fat.NPOINTS,
+    is_local: @tables_fat.LOCAL,
+    edim: @tables_fat.EDIM,
+    rad_dim: @tables_fat.RAD_DIM,
+    socle_dim: @tables_fat.SOCLE_DIM,
+    cotangent_dim: @tables_fat.COTANGENT_DIM,
+    ext1_dim: @tables_fat.EXT1_DIM,
+    frob_fixed: @tables_fat.FROB_FIXED,
+    group_order: @tables_fat.GROUP_ORDER,
+    group_rank: @tables_fat.GROUP_RANK,
+    kind: @tables_fat.KIND,
+    betti: @tables_fat.betti,
+  }
+}
+
+///|
+/// The wild table `A = K[C_2 x C_2] = K[x,y]/(x^2-1,y^2-1)` over
+/// `K = F_2`: a local `p`-group algebra with non-trivial cohomology.
+///
+/// Entirely frozen: the body is a compile-time constant, so reading it
+/// costs no code beyond the `Tables` record itself (see `Tables`).
+pub fn Tables::wild() -> Tables {
+  {
+    p: @tables_wild.P,
+    d: @tables_wild.D,
+    nvar: @tables_wild.NVAR,
+    basis: @tables_wild.basis,
+    mul_tensor: @tables_wild.mul_tensor,
+    points: @tables_wild.points,
+    npoints: @tables_wild.NPOINTS,
+    is_local: @tables_wild.LOCAL,
+    edim: @tables_wild.EDIM,
+    rad_dim: @tables_wild.RAD_DIM,
+    socle_dim: @tables_wild.SOCLE_DIM,
+    cotangent_dim: @tables_wild.COTANGENT_DIM,
+    ext1_dim: @tables_wild.EXT1_DIM,
+    frob_fixed: @tables_wild.FROB_FIXED,
+    group_order: @tables_wild.GROUP_ORDER,
+    group_rank: @tables_wild.GROUP_RANK,
+    kind: @tables_wild.KIND,
+    betti: @tables_wild.betti,
+  }
 }

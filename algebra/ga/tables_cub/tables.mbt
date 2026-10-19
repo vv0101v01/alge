@@ -17,6 +17,21 @@ pub let mul_tensor : Array[Int] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 
 pub const NPOINTS : Int = 3
 pub let points : Array[Int] = [1, 2, 3]
 
+// ---- cohomological / isomorphism invariants (frozen) ----------------
+pub const RAD_DIM : Int = 0
+pub const SOCLE_DIM : Int = 3
+pub const COTANGENT_DIM : Int = 0
+pub const EXT1_DIM : Int = 0
+pub const FROB_FIXED : Int = 3
+pub const GROUP_ORDER : Int = 0
+pub const GROUP_RANK : Int = 0
+/// 0 = etale (a product of finite fields), 1 = a p-group algebra,
+/// 2 = local but not a group algebra.
+pub const KIND : Int = 0
+/// dim_k H^i(G, k) for i = 0 .. NBETTI - 1 (empty unless GROUP_ORDER > 0).
+pub const NBETTI : Int = 0
+pub let betti : Array[Int] = []
+
 /// `c * d'` for two coordinate vectors: one table read per nonzero term.
 pub fn mul(c : Array[Int], e : Array[Int]) -> Array[Int] {
   let res = Array::make(D, 0)

@@ -322,6 +322,9 @@ pub fn right_inverse(k : Fp, m : Array[Array[Int32]]) -> Array[Int32] {
     i += 1
   }
   let pivots : Array[Int32] = []
+  // `pivot_rows[pi]` is the row of `aug` whose pivot is `pivots[pi]`; a
+  // rank-deficient row is skipped, so discovery order is *not* row order.
+  let pivot_rows : Array[Int32] = []
   let mut rr = 0
   while rr < r {
     let mut c = 0
@@ -334,6 +337,7 @@ pub fn right_inverse(k : Fp, m : Array[Array[Int32]]) -> Array[Int32] {
     }
     if found >= 0 {
       pivots.push(found)
+      pivot_rows.push(rr)
       let inv = k.inv(aug[rr][found])
       let mut cc = 0
       while cc < d + r {
@@ -373,9 +377,10 @@ pub fn right_inverse(k : Fp, m : Array[Array[Int32]]) -> Array[Int32] {
     let mut pi = 0
     while pi < pivots.length() {
       let p = pivots[pi]
-      let mut acc = aug[pi][d + a]
+      let row = aug[pivot_rows[pi]]
+      let mut acc = row[d + a]
       if free_a {
-        acc = k.sub(acc, aug[pi][d + a])
+        acc = k.sub(acc, row[d + a])
       }
       out[p * r + a] = acc
       pi += 1

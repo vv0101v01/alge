@@ -1,7 +1,8 @@
 import {
-  // Used by `ga_wbtest.mbt` only: the runtime package itself never reads the
-  // frozen tables.  `moon check` reports them as unused because it does not
-  // count test-only imports -- do not remove them, the tests stop compiling.
+  // The frozen tables are re-exposed by `Tables::cub` / `Tables::fat` /
+  // Tables::wild`, so these imports are read by `ga.mbt` itself and the
+  // white-box tests never add an import of their own.
   "arena/algebra/ga/tables_cub",
   "arena/algebra/ga/tables_fat",
+  "arena/algebra/ga/tables_wild",
 }

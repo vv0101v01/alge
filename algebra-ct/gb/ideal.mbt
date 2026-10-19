@@ -574,6 +574,11 @@ pub fn nullspace(
   }
   let a = m.map(r => r.copy())
   let pivots : Array[Int32] = []
+  // `pivot_rows[pi]` is the row of `a` whose pivot is `pivots[pi]`: the two
+  // must be tracked separately, because a rank-deficient row (a zero row, or
+  // one that became zero during elimination) is skipped and would otherwise
+  // shift the correspondence used in the back-substitution below.
+  let pivot_rows : Array[Int32] = []
   let mut r = 0
   while r < rows {
     let mut c = 0
@@ -586,6 +591,7 @@ pub fn nullspace(
     }
     if found >= 0 {
       pivots.push(found)
+      pivot_rows.push(r)
       let inv = k.inv(a[r][found])
       let mut cc = 0
       while cc < cols {
@@ -623,7 +629,7 @@ pub fn nullspace(
     v[f] = 1
     for pi in 0..<pivots.length() {
       let p = pivots[pi]
-      v[p] = k.neg(a[pi][f])
+      v[p] = k.neg(a[pivot_rows[pi]][f])
     }
     out.push(v)
   }

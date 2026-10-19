@@ -77,8 +77,9 @@ fn main raise {
       return
     }
   }
+  let inv = @coho.analyse(k, n, gens, @poly.Lex, q, ps)
   let stats = b.stats
-  println(@emit.emit_runtime(k, q, stats, ps, name))
+  println(@emit.emit_runtime(k, q, stats, ps, inv, name))
 }
 
 ///|
