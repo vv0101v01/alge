@@ -127,6 +127,33 @@ pub fn Quot::eval_coords(
 }
 
 ///|
+/// The whole pipeline for a zero-dimensional input, in one pass: the Gröbner
+/// basis of `I`, the `K`-rational points of `V(I)`, and the coordinate ring
+/// `A = R/I`.
+///
+/// Every consumer needs the same three objects, and each of them used to run
+/// Buchberger and the point enumeration itself -- the same `O(d^2)` work three
+/// times.  Running it once here is both cheaper and the reason the callers
+/// agree on the basis the table was built from.
+///
+/// The ring is `None` when the point enumeration runs out of `budget`, which
+/// for a positive dimensional ideal is the expected answer: `A` is then
+/// infinite dimensional and cannot be tabulated at all.
+pub fn build_algebra(
+  k : Fp,
+  n : Int32,
+  gens : Array[Poly],
+  order : Order,
+  budget : Int32,
+) -> (Basis, Array[Array[Int32]], Quot?) {
+  let b = @gb.buchberger(k, gens, order)
+  match @gb.points_from_gb(k, n, b, budget) {
+    Some(ps) => (b, ps, Some(quotient_ring_from_basis(k, n, b, ps)))
+    None => (b, [], None)
+  }
+}
+
+///|
 /// Build the coordinate ring `A = R/I` of a zero-dimensional ideal: one
 /// Gröbner basis, one table.
 pub fn quotient_ring(
@@ -135,12 +162,11 @@ pub fn quotient_ring(
   gens : Array[Poly],
   order : Order,
 ) -> Quot {
-  let b = @gb.buchberger(k, gens, order)
-  let ps = match @gb.points_from_gb(k, n, b, POINT_BUDGET) {
-    Some(v) => v
-    None => []
+  let (b, ps, q) = build_algebra(k, n, gens, order, POINT_BUDGET)
+  match q {
+    Some(q) => q
+    None => quotient_ring_from_basis(k, n, b, ps)
   }
-  quotient_ring_from_basis(k, n, b, ps)
 }
 
 ///|

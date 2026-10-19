@@ -1,6 +1,7 @@
 # MoonBit 代數演算法系統：編譯期零成本抽象與隱蔽式形式化證明
 
-> 本文對應工作區 `/home/user/algebra/`，所有數字均為實際執行結果（見文末〈執行方式〉）。
+> 本文對應工作區 `/home/user/alge-repo/`（Git 倉庫；`/home/user/algebra/` 為其保留鏡像），
+> 所有數字均為實際執行結果（見文末〈執行方式〉）。
 > 語言：MoonBit（最新穩定版，經 `moonup install latest` 安裝）。
 > 代數對象覆蓋題目要求的全部結構：座標環、落特環、函數環、仿射代數簇、概形、層、
 > 冪等元、正規局部環、投射模、凝聚層、連續模、剩餘理想、半單理想、單純理想、半素／根理想。
@@ -11,20 +12,26 @@
 
 | 層 | 路徑 | 內容 | 驗證 |
 |---|---|---|---|
-| 編譯期引擎 | `algebra-ct/{poly,gb,quot,val,coho,emit}` + `cmd/gen` | 有限域/多項式、Gröbner、零維商環、截斷冪級數、**上同調不變量**、代碼生成 | **63/63** 斷言測試通過 |
+| 編譯期引擎 | `algebra-ct/{poly,la,gb,quot,val,coho,cat,emit}` + `cmd/gen` | 有限域/多項式、有限域線性代數、Gröbner、零維商環、截斷冪級數、**上同調不變量**、**範疇化**、代碼生成 | **81/81** 斷言測試通過 |
 | 執行期零成本層 | `algebra/ga` | 只含凍結整數表 + 查表運算 | **9/9** 斷言測試通過 |
-| 隱蔽形式化證明（Z3） | `proof/ga_proofs.py` | 124 條定理、**335 個 SMT 目標，全部 `unsat` 放行（3.3 秒）** | `proof/RESULTS.md` |
+| 隱蔽形式化證明（Z3） | `proof/ga_proofs.py` + `proof/cat_proofs.py` | 凍結表 **335 個 SMT 目標** + 範疇化 **40 個目標**，合計 **375 個目標全部 `unsat` 放行** | `proof/RESULTS.md`、`proof/RESULTS_CAT.md` |
 | 隱蔽形式化證明（MoonBit） | `algebra/gap/gap.mbtp` | `predicate` / `lemma` / `proof_ensure` 邏輯側規格 | `moon check` 乾淨（`moon prove` 需 Why3） |
 
 關鍵數據：
 
-* 引擎測試：`poly 19 + gb 23 + quot 6 + val 7 + coho 8 = 63`，全部通過（`assert_eq` / `assert_true`），且 `moon check --deny-warn` 零警告。
+* 引擎測試：`poly 19 + gb 23 + quot 6 + val 7 + la 6 + coho 8 + cat 13 = 81`，全部通過（`assert_eq` / `assert_true`），且 `moon check --deny-warn` 零警告。
 * 執行期測試：凍結張量、原始冪等元、局部點的 socle、非正規性、根的互異性，以及 T7–T11 的
   餘切空間、`Ext¹`、`K[C₂×C₂]` 的 Betti 數 `b_i = i+1`，全部通過。
 * 編譯期生成的常數：`D=3, NVAR=1, EDIM=0`（cub，`A = K³`）、`D=3, NVAR=2, EDIM=2`
   （fat）、`D=4, NVAR=2, EDIM=2, GROUP_ORDER=4`（wild，`A = K[C₂×C₂]`）。
 * 上同調不變量（第 2.10 節 T7–T11）：`rad A`、`soc`、`Ω¹ ⊗_A K` 的維數、`Ext¹`、
   Frobenius 固定點、`KIND` 三分類與 Cohen–Mac Lane Betti 數，全部**編譯期**算完凍結。
+* 範疇化（第 2.12 節 T16–T18）：整數被提升為**分次物件與餘可估複形**——
+  `Graded`、Koszul 複形（含矩陣）、Loewy 濾過 `gr^i A_p = m^i/m^{i+1}`、
+  Cohen–Mac Lane 環 `Λ^*(V) ⊗ K[W]`（含乘法表、結合律、分次反交換）。
+  由凍結張量實算：胖點 Loewy `1 + 2t`、Koszul 上同調 `1 + 3t + 2t²`；
+  wild Loewy `1 + 2t + t²`、Koszul 上同調 `1 + 3t + 3t² + t³ = (1+t)³`；
+  `Λ^*(k²) ⊗ K[w²]` 的第 `i` 次分次維數 `= i + 1`，與凍結 `betti` 逐項相同。
 * 執行期 **不含任何 Gröbner 運算**：乘法是一個 `D×D×D` 整數張量的查表。
 
 ---
@@ -40,6 +47,9 @@
   │ gb    Buchberger + 準則 + 認證│   理想、餘理想、根理想、半素判定
   │ quot  零維商環 A = K[x]/I    │   標準單項式基底、求值矩陣、冪等元、socle
   │ val   K[[t]]/(t^N) 落特環    │   Newton 倍增、平方根、級數根
+  │ la    有限域線性代數          │   RREF、核、像、商基、矩陣乘（可矩形）
+  │ coho  上同調不變量（T7–T11） │   rad、socle、Ω¹、Ext¹、Frobenius、KIND
+  │ cat   範疇化（T16–T18）       │   Graded、餘可估複形（帶矩陣）、Koszul、Loewy、C-M 環
   │ emit  凍結表產生器           │   D / BASIS / MUL / POINTS / EDIM / LOCAL / COST
   └─────────────────────────────┘
              │  cmd/gen （MoonBit 程式產生器）
@@ -54,7 +64,7 @@
   └─────────────────────────────┘
              │
              ▼
-  gap/gap.mbtp + proof/ga_proofs.py   隱蔽形式化證明（不影響執行期）
+  gap/gap.mbtp + proof/{ga_proofs,cat_proofs}.py   隱蔽形式化證明（不影響執行期）
 ```
 
 **零成本的定義與保證機制.** 「零成本抽象」在此具體化為：
@@ -350,6 +360,84 @@ KIND = 2  ⟺  局部但非群代數。
 是正合序列；`A` 作為自身模是自由模故平坦（連續模）。Z3 目標 `T6.exact_xA`、`T6.exact_yA`、
 `T6.exact_at_A` 以「核 = 商理想」的參數式描述驗證這些精確性斷言。
 
+### 2.12 範疇化：分次物件、餘可估複形、Loewy 濾過與 Cohen–Mac Lane 環（T16–T18）
+
+`coho` 層把一切上同調不變量壓成**整數**（`RAD_DIM`、`SOCLE_DIM`、`COTANGENT_DIM`、
+`EXT1_DIM`、`betti`）。範疇化層（`algebra-ct/cat`）把同樣的資訊還原成**物件**：
+分次向量空間、带矩陣的餘可估複形、以及帶乘法的分次環。整數因此成為物件的維數，
+而不是被硬編碼的輸入。
+
+**定義 2.42（分次物件 `Graded`）.** 分次向量空間由逐次維數 `dims[i] = dim_k G^i` 表示，
+支援 `+ − × scalar ⊗ ^n`、交錯和 `alt = Σ_i (−1)^i dims[i]` 與 Poincaré 級數輸出。
+`trim()` 只丟棄**尾端**零次（頭端零次會移動元素，故保留）。
+
+**定義 2.43（餘可估複形 `Complex`）.** `C^0 → C^1 → ⋯ → C^n`，每個 `d^i` 以
+`(dim C^i)` 列、`(dim C^{i−1})` 行的**矩陣**寫出；同調由消元得出，
+`dim H^i = dim C^i − rank d^i − rank d^{i+1}`（Euler 形式），並另給出真正的
+**代表元** `homology_basis(i)`：核基中模掉像的標準化向量。
+
+**定理 2.44（Tate 的範疇形式）.** 設 `F_* → A` 是自由分解，則
+`Ext^i_A(M,N) = H^i(Hom_A(F_*,N))`、`Tor_i^A(M,N) = H_i(F_* ⊗_A M)`；
+故當 `F_i` 是秩 `b_i` 的自由模時，`Ext^i` 與 `Tor_i` 互為對偶且同為 `b_i` 維。
+Betti 數因此**不是**「`Ext¹` 的維數」，而是分解中自由模的秩。
+
+**定理 2.45（T16，Koszul 複形與參數上同調）.** 對局部分量 `A_p` 與其極大理想 `m_p`
+的一組基底 `θ_0,…,θ_{m−1}`，Koszul 複形
+
+```text
+K^i = A_p ⊗ Λ^i(θ),   d^i(b_a ⊗ e_S) = Σ_{j∈S} (−1)^{pos(j)} (b_a θ_j) ⊗ e_{S∖{j}}
+```
+
+在**任何**有限維局部代數上都是餘可估複形（`d d = 0` 由構造即得，測試以矩陣逐項驗證）；
+它是剩餘域的分解當且僅當 `θ` 構成正則序列。故其上同調被如實稱為**參數上同調**，
+**不宣稱**為 `Tor`——那會等價於宣稱每個 Artin 局部環都正則。無條件成立的是：
+`H^0 = A_p/m_p = K`（維數 1），且 `im d^1 = A_p·m_p = m_p`，故 `rank d^1 = dim_k m_p`。
+`H^i ≡ 1`（整個物件只有第 0 次）恰好等價於 `A_p` 正則，即 `mdim = 0`。
+
+**定理 2.46（T17，Loewy 濾過）.** `A_p` 是 Artin 局部環，`m^0 = A_p ⊇ m ⊇ ⋯ ⊇ m^L = 0`，
+故 `gr^i A_p = m^i/m^{i+1}` 給出分次物件且
+
+```text
+Σ_i gr^i A_p = dim_k A_p,   Σ_{i≥1} gr^i A_p = dim_k m_p = RAD_DIM,   gr^0 = 1,
+gr^{L−1} A_p = soc A_p  （因 m^L = 0 使 m^{L−1}·m_p = 0）。
+```
+
+於是 `coho` 的 `RAD_DIM`、`SOCLE_DIM` 是同一個濾過物件的**頭幾個分次**與**最後分次**，
+而非獨立的另一批事實；`A` 的 socle 是各因子 socle 的直和（故 `cub` 三點的 socle 維數相加為 3）。
+
+**定理 2.47（T18，Cohen–Mac Lane 環與 Tate 自由秩）.** 對 `p`-群 `G`（`|G| = p^n`），
+令 `r` 為最小生成元數、`w = n − r`，則
+
+```text
+H^*(G,K) = Λ^*(V) ⊗ K[W],  |V| = r, |W| = 2w,   P(t) = (1+t)^r/(1−t²)^w;
+F_i = K[G] ⊗ Λ^i(k^r) ⊗ K[w]^{⌊i/2⌋},   rank_i = dim_k F_i / |K[G]| = dim_k H^i.
+```
+
+`cat/ring.mbt` **建出這個環本身**：基元素是三元組 `(a, b, μ)`（外次數、對稱次數、多重集），
+乘法是 `e_S·e_S' = (−1)^{#{i∈S, j∈S' : i>j}} e_{S∪S'}`（`S ∩ S' = ∅`）與 `μ·ν = μ+ν`。
+系統以**乘法表**（非公式）檢查結合律、分次反交換與乘法單位；
+Koszul 符號滿足 `s(S,T)·s(T,S) = (−1)^{|S||T|}`，即分次反交換。
+於是分次維數 `b_i` 同時是 Cohen–Mac Lane 的 `dim H^i` 與 Tate 分解的自由秩
+（`tate_ranks = gr` 為程式內可測的等式）。
+
+**誠實邊界（不可從乘法表推出者）.** `Λ^*(V) ⊗ K[W]` 由**群代數參數** `(r, w)` 建構，
+它是一個真正的分次代數（乘法、結合律、反交換皆經機器檢查），但**不是**由本表的乘法表推出：
+`k[x]/(x²)` 與 `k[y]/(y², y³)` 同樣有限維，其 `Tor` 卻不同——底環的 Tor 取決於底環本身，
+不由張量的維數決定。由張量本身推導的物件是 `Hilbert` 級數、`gr^i A_p`、`gr^i m_p`
+（`socle_graded`）與 `parameter_cohomology`，它們全部由消元從 `mul_tensor` 算出。
+
+**機器驗證**：三張表上的結果
+
+| 表 | `A_p` | `dim m_p` | Loewy `gr^i A_p` | socle | 參數上同調 | `dd = 0` |
+|---|---|---|---|---|---|---|
+| `fat` | `K[x,y]/(x²,xy,y²)`，`dim = 3` | 2 | `1 + 2t` | 2 | `1 + 3t + 2t²` | ✓ |
+| `wild` | `F₂[x,y]/(x²−1,y²−1)`，`dim = 4` | 3 | `1 + 2t + t²` | 1 | `1 + 3t + 3t² + t³` | ✓ |
+| `cub` | 每點 `K` | 0 | `1`（三點） | 3 | `1`（每點） | ✓ |
+
+（`13` 個斷言測試見 `cat/cat_wbtest.mbt`；`40` 個隱蔽 Z3 目標見
+`proof/RESULTS_CAT.md` —— `m² = span{1+x+y+xy}`、`dim_k m² = 1`、
+`b_i = i+1` 與凍結 `betti` 逐項相符，皆由**凍結張量重新消元**後比對。）
+
 ---
 
 ## 3. 演算法、複雜度與收斂分析
@@ -513,7 +601,8 @@ front，可把剩餘部分降維到 `D` 維線性代數。
 
 | 層 | 位置 | 狀態 |
 |---|---|---|
-| Z3（SMT-LIB2 語義） | `proof/ga_proofs.py` → `proof/RESULTS.md` | **335 / 335 目標 `unsat`，3.3 秒** |
+| Z3（SMT-LIB2 語義，凍結表） | `proof/ga_proofs.py` → `proof/RESULTS.md` | **335 / 335 目標 `unsat`** |
+| Z3（範疇化層） | `proof/cat_proofs.py` → `proof/RESULTS_CAT.md` | **40 / 40 目標 `unsat`** |
 | MoonBit（`moon prove`） | `algebra/gap/gap.mbtp` | 通過 `moon check`；執行 `moon prove ga/gap` 需 Why3 ≥ 1.7.2 與 z3 |
 
 「隱蔽」的含義：**驗證邊界與執行邊界分離**。`gap` 套件不被任何執行期套件依賴，
@@ -554,6 +643,12 @@ T10* Frobenius：由凍結張量重算 Fix(a↦a^p) = FROB_FIXED = NPOINTS
 T11* 群代數與 Betti 數：|G| = p^r = D、edim = r、soc = A·N 一維、rad = I(G) 維數 |G|−1、
     Cohen-Maclane 係數逐項相符、b_0 = 1、正次 Betti 數 > 0、
     Maschke（|G| ≢ 0 ⇒ betti 為空）、KIND 三分類、étale ⇔ rad = 0 ⇔ Tor¹ = 0
+T16* 範疇化（Koszul）：dim_k A_p、dim_k m_p = RAD_DIM（m_p = ker ev_pt）、d^i d^{i+1} = 0、
+    H^0 = A_p/m_p = 1、im d^1 = m_p 故 rank d^1 = RAD_DIM、胖點 1+3t+2t²、wild (1+t)³
+T17* 範疇化（Loewy）：Σ gr^i = dim A_p、Σ_{i≥1} gr^i = RAD_DIM 且 gr^0 = 1、
+    各因子最後分次之和 = SOCLE_DIM、胖點 1+2t、wild 1+2t+t²、m² = span{1+x+y+xy}
+T18* 範疇化（Cohen-Mac Lane 環）：|G| = p^n 且 r = GROUP_RANK、dim_k H^i = i+1 與凍結
+    betti 逐項相符、環大小 112、H^0 = 1、外積符號 = Koszul 符號且 s(S,T)s(T,S) = (−1)^{|S||T|}
 ```
 
 > **憑證強度說明**：上表 `T7*`/`T8*`/`T10*`/`T11*` 的 `rad A`、`Soc(A)`、Frobenius 固定空間、
@@ -561,7 +656,8 @@ T11* 群代數與 Betti 數：|G| = p^r = D、edim = r、soc = A·N 一維、rad
 > Cohen-Maclane 公式），再與凍結常數比對；理想本身則直接解析 `algebra/moon.mod`
 > 的 `--terms` 規則取得，確保憑證量化的是引擎實際執行的那個理想。
 
-完整表格見 `proof/RESULTS.md`。
+完整表格見 `proof/RESULTS.md`（凍結表，375 個目標含範疇化）與
+`proof/RESULTS_CAT.md`（範疇化 40 個目標）。兩者皆由 `python3 proof/run_proofs.py` 重新產生。
 
 ### 6.4 信任邊界（誠實聲明）
 
@@ -572,6 +668,11 @@ T11* 群代數與 Betti 數：|G| = p^r = D、edim = r、soc = A·N 一維、rad
    MoonBit 側改寫，可望在具備 proof toolchain 的環境直接放行。
 3. 所有 Z3 目標均以「否定命題 `unsat`」為通過標準，失敗會以非零碼結束
    （`python3 proof/run_proofs.py; echo $?`）。
+4. `cat_proofs.py` 的範疇化目標不是重新實作引擎，而是**由凍結 `mul_tensor` 重新消元**
+   （局部分量的冪等元、Lagrange 插值或單位元、`m_p = ker ev_pt`、理想冪、Koszul 矩陣），
+   再以 Z3 整數等式與凍結常數／定理敘述比對；其 `Local` 類與 `cat/res.mbt` 的
+   `local_factor` 是同一構造的兩份實作，兩者給出相同的 Loewy 與 Koszul 數字，
+   互為交叉檢查。
 
 ---
 
@@ -580,11 +681,14 @@ T11* 群代數與 Betti 數：|G| = p^r = D、edim = r、soc = A·N 一維、rad
 ```bash
 export PATH="$HOME/.moon/bin:$HOME/.moonup/bin:$PATH"
 
-# 1) 編譯期引擎（63 個斷言測試）
-cd /home/user/algebra/algebra-ct && moon test --target native
+# 0) 若工具鏈不在（沙箱重啟後 .moonup 不保留）：
+#    sh /tmp/moonup_install.sh && moonup install latest
+
+# 1) 編譯期引擎（81 個斷言測試：poly 19 + gb 23 + quot 6 + val 7 + la 6 + coho 8 + cat 13）
+cd /home/user/alge-repo/algebra-ct && moon check --deny-warn && moon test --target native
 
 # 2) 生成器（CLI）
-cd /home/user/algebra/algebra-ct && moon build --target native cmd/gen
+cd /home/user/alge-repo/algebra-ct && moon build --target native cmd/gen
 #   語法： 多項式以 ';' 分隔；項以 '|' 分隔；指數以 '.' 分隔；係數以 ':' 分隔
 #   範例： --p 7  --n 2 --terms "2.0:1;1.1:1;0.2:1"             --name fatpoint
 #          --p 97 --n 1 --terms "3.0:1|2.0:-6|1.0:11|0.0:-6"   --name cub
@@ -593,13 +697,19 @@ cd /home/user/algebra/algebra-ct && moon build --target native cmd/gen
 #   兩個生成元，在 F_2 中它們生成的是單位理想 (1)。
 
 # 3) 執行期（9 個斷言測試；dev_build 會自動重生成凍結表）
-cd /home/user/algebra/algebra && moon test --target native
+cd /home/user/alge-repo/algebra && moon test --target native
 
-# 4) 隱蔽形式化證明（Z3）
-cd /home/user/algebra/proof && python3 run_proofs.py     # -> RESULTS.md
+# 4) 隱蔽形式化證明（Z3）：凍結表 335 + 範疇化 40 = 375 目標
+cd /home/user/alge-repo/proof && python3 run_proofs.py    # -> RESULTS.md, RESULTS_CAT.md
 
 # 5) MoonBit 側證明（需 Why3 ≥ 1.7.2 + z3）
-cd /home/user/algebra/algebra && moon prove ga/gap
+cd /home/user/alge-repo/algebra && moon prove ga/gap
+
+# 6) 凍結表重生成（結果與倉庫中的表逐位元組相同）
+cd /home/user/alge-repo/algebra-ct
+moon run ./cmd/gen --p 97 --n 1 --terms "3.0:1|2.0:-6|1.0:11|0.0:-6" --name cub
+moon run ./cmd/gen --p 7  --n 2 --terms "2.0:1;1.1:1;0.2:1"              --name fatpoint
+moon run ./cmd/gen --p 2  --n 2 --terms "2.0:1|0.0:-1;0.2:1|0.0:-1"        --name wild
 ```
 
 ---
@@ -643,11 +753,18 @@ cd /home/user/algebra/algebra && moon prove ga/gap
   `trunc`、`series_deriv`（含乘積律 `(fg' = f'g + fg'`）、`series_pow`。
 * `algebra-ct/coho`（8）：T7–T11 白盒測試——reduced / étale 例、非簡約胖點、`p`-群代數
   `F₂[C₂×C₂]`、Frobenius 固定空間、Cohen–Mac Lane 係數。
+* `algebra-ct/cat`（13）：`Graded` 的分次代數律與 `trim` 語義；T16 的 Koszul 複形——
+  項維數 `d·C(m,i)`、`d d = 0`（以矩陣驗證）、`H^0 = 1`、胖點 `1+3t+2t²`、wild `(1+t)³`、
+  etale 每點為 `1`、同調維數與 `homology_basis` 的代表元數一致；T17 的 Loewy
+  `1+2t` / `1+2t+t²`、總維數、`Σ_{i≥1}`、`socle_graded`、etale 三點；T18 的
+  `Λ(k²)⊗K[w²]` 分次 `b_i = i+1`、總大小 112、`tate_ranks = gr`、單位、結合律（窮舉三元組）、
+  分次反交換、外積的 Koszul 符號、與凍結 `betti` 前四項相符。
 * `algebra/ga`（9）：凍結張量即環；原始冪等元（和為 1、正交、冪等、求值為 δ）；胖點局部 +
   `edim = 2` + `socle` 二維 + `m² = 0`；根的求值互異；T7/T8 的 étale 與胖點上同調；
   T9/T10 的 `K[C₂×C₂]` Betti 數 `b_i = i+1` 與 `N² = 0`；
   **反例測試**「餘切空間 ≠ `dim_k Ω¹`」；`nullspace`/`solve` 的支點列回歸。
-* `proof`（124 條定理 / 335 目標）：見 `proof/RESULTS.md`。
+* `proof`（凍結表 335 目標 + 範疇化 40 目標 = 375 目標，全部 `unsat`）：
+  見 `proof/RESULTS.md` 與 `proof/RESULTS_CAT.md`。
 ---
 
 ## 附錄 C：全代碼健檢（2026-10-16）與修復清單

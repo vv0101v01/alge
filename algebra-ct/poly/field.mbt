@@ -70,9 +70,9 @@ pub fn Fp::neg(self : Fp, a : Int32) -> Int32 {
 /// `a = 0` yields `0` (for `p > 2`): the engine keeps the inner loops branch
 /// free, so the zero case is a documented precondition on the caller, not a
 /// runtime error.  Every division site in this package guards the divisor
-/// with `is_nonzero`/`inv(1)` first, and `span_basis`, `nullspace` and
-/// `right_inverse` only ever invert a pivot, which is non-zero by
-/// construction.
+/// with `is_nonzero`/`inv(1)` first; the elimination helpers `la.span_basis`,
+/// `la.nullspace` and `quot.right_inverse` live in their own packages and only
+/// ever invert a pivot, which is non-zero by construction.
 pub fn Fp::inv(self : Fp, a : Int32) -> Int32 {
   self.pow(self.norm(a), self.p - 2)
 }

@@ -54,17 +54,16 @@ fn main raise {
     println("gen: no generators")
     return
   }
-  // One Gröbner basis feeds all three consumers.  Computing it once and
-  // passing it down replaced three identical Buchberger runs.
-  let b = @gb.buchberger(k, gens, @poly.Lex)
-  let ps = match @gb.points_from_gb(k, n, b, POINT_BUDGET) {
-    Some(v) => v
+  // One Gröbner basis feeds all consumers: computing it once and passing it
+  // down replaced three identical Buchberger runs.
+  let (b, ps, qopt) = @quot.build_algebra(k, n, gens, @poly.Lex, POINT_BUDGET)
+  let q = match qopt {
+    Some(q) => q
     None => {
       println("gen: point enumeration exhausted its budget")
       return
     }
   }
-  let q = @quot.quotient_ring_from_basis(k, n, b, ps)
   // Sanity check on the emitted cardinality.  A zero dimensional ideal whose
   // pure leading monomials all have degree <= d has `dim_k R/I <= d^n`, so a
   // violation means the standard-monomial enumeration and the Gröbner basis

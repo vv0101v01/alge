@@ -13,11 +13,12 @@ discharged by finite enumeration, which is legitimate here because the rings
 are *defined* as finite sets (dim D = 3 over F_p).
 """
 import math
+import os
 import re, sys, time
 from itertools import product
 import z3
 
-ROOT = "/home/user/algebra/algebra/ga"
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "algebra", "ga")
 
 
 # ---------------------------------------------------------------- tables ----

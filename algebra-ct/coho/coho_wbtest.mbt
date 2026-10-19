@@ -5,9 +5,6 @@
 /// (T7--T11); the numbers are small enough to be checked by hand.
 
 ///|
-type GBasis = @gb.Basis
-
-///|
 fn k97() -> Fp {
   Fp::new(97)
 }
@@ -23,18 +20,22 @@ fn k2() -> Fp {
 }
 
 ///|
-/// `A = F_p[x] / (x^3)`: local, one point, `edim = 1`, `soc = 1`.
-fn local_trivial(k : Fp) -> (GBasis, Quot, Array[Array[Int32]]) {
-  let gens = [
-    Poly::var_n(k, 1, 0).mul(Poly::var_n(k, 1, 0)).mul(Poly::var_n(k, 1, 0)),
-  ]
-  let b = @gb.buchberger(k, gens, Lex)
-  let ps = match @gb.points_from_gb(k, 1, b, 100000) {
-    Some(v) => v
-    None => []
+/// `A = R/I` for a zero-dimensional `I`, together with the points of `V(I)`.
+/// Every test below feeds a zero-dimensional ideal, which is exactly the case
+/// in which the pipeline cannot fail.
+fn ring(k : Fp, n : Int32, gens : Array[Poly]) -> (Quot, Array[Array[Int32]]) {
+  let (_, ps, q) = @quot.build_algebra(k, n, gens, Lex, 100000)
+  match q {
+    Some(q) => (q, ps)
+    None => abort("ring: the ideal is not zero dimensional")
   }
-  let q = @quot.quotient_ring_from_basis(k, 1, b, ps)
-  (b, q, ps)
+}
+
+///|
+/// `A = F_p[x] / (x^3)`: local, one point, `edim = 1`, `soc = 1`.
+fn local_trivial(k : Fp) -> (Quot, Array[Array[Int32]]) {
+  let x = Poly::var_n(k, 1, 0)
+  ring(k, 1, [x.mul(x).mul(x)])
 }
 
 ///|
@@ -42,7 +43,7 @@ test "T7: dim Omega^1 = sum of the embedding dimensions" {
   let k = k97()
   // A = K[x]/(x^3): m/m^2 has dimension 1, so Omega^1 is one-dimensional and
   // the coordinate ring is not reduced.
-  let (_, q, ps) = local_trivial(k)
+  let (q, ps) = local_trivial(k)
   let inv = analyse(
     k,
     1,
@@ -66,12 +67,7 @@ test "T8: Ext^1 vanishes exactly when the ring is reduced" {
   let k = k97()
   let x = Poly::var_n(k, 1, 0)
   let gens = [x.mul(x).mul(x).sub(Poly::const_n(k, 1, 8))] // x^3 - 8 = (x-2)(x-2w)(x-2w^2)
-  let b = @gb.buchberger(k, gens, Lex)
-  let ps = match @gb.points_from_gb(k, 1, b, 100000) {
-    Some(v) => v
-    None => []
-  }
-  let q = @quot.quotient_ring_from_basis(k, 1, b, ps)
+  let (q, ps) = ring(k, 1, gens)
   let inv = analyse(k, 1, gens, Lex, q, ps)
   // gcd(x^3 - 8, 3x^2) = 1 over F_97 (8 != 0 and 3 != 0), so A is a product
   // of three distinct fields: reduced, so Omega^1 = 0 and Ext^1 = 0.
@@ -88,13 +84,8 @@ test "the fat point: Omega^1 = Ext^1 = soc = 2" {
   let x = Poly::var_n(k, 2, 0)
   let y = Poly::var_n(k, 2, 1)
   let gens = [x.mul(x), x.mul(y), y.mul(y)] // K[x,y]/(x^2, xy, y^2)
-  let b = @gb.buchberger(k, gens, Lex)
-  let ps = match @gb.points_from_gb(k, 2, b, 100000) {
-    Some(v) => v
-    None => []
-  }
+  let (q, ps) = ring(k, 2, gens)
   assert_eq(ps.length(), 1)
-  let q = @quot.quotient_ring_from_basis(k, 2, b, ps)
   let inv = analyse(k, 2, gens, Lex, q, ps)
   assert_eq(inv.dim, 3)
   assert_eq(inv.rad_dim, 2) // rad = (x, y)
@@ -116,12 +107,7 @@ test "T9 + T10: the wild p-group algebra F_2[C_2 x C_2]" {
   // x^2 = y^2 = 1 is k[C_2 x C_2]; shifting to (x-1, y-1) gives the familiar
   // presentation K[u,v]/(u^2, v^2) used below.
   let gens = [x.mul(x).sub(Poly::one_n(k, 2)), y.mul(y).sub(Poly::one_n(k, 2))]
-  let b = @gb.buchberger(k, gens, Lex)
-  let ps = match @gb.points_from_gb(k, 2, b, 100000) {
-    Some(v) => v
-    None => []
-  }
-  let q = @quot.quotient_ring_from_basis(k, 2, b, ps)
+  let (q, ps) = ring(k, 2, gens)
   let inv = analyse(k, 2, gens, Lex, q, ps)
   assert_eq(inv.dim, 4) // |C_2 x C_2|
   assert_eq(inv.rad_dim, 3) // rad = ((x-1), (y-1)), quotient of dimension 1
@@ -159,12 +145,7 @@ test "T11: Frobenius data recovers the number of points" {
     .add(x.mul(Poly::const_n(k, 1, 11)))
     .add_const_public(91),
   ]
-  let b = @gb.buchberger(k, gens, Lex)
-  let ps = match @gb.points_from_gb(k, 1, b, 100000) {
-    Some(v) => v
-    None => []
-  }
-  let q = @quot.quotient_ring_from_basis(k, 1, b, ps)
+  let (q, ps) = ring(k, 1, gens)
   let inv = analyse(k, 1, gens, Lex, q, ps)
   assert_eq(inv.frob_fixed, 3) // # K-rational points
   // An etale algebra is fixed-point free in higher powers only if the residue
@@ -181,18 +162,6 @@ test "log_p and binomial arithmetic" {
   assert_eq(binom(5, 2), 10)
   assert_eq(binom(5, 6), 0)
   assert_eq(binom(0, 0), 1)
-}
-
-///|
-test "matrix rank over a prime field" {
-  let k = k97()
-  let m0 : Array[Array[Int32]] = [[1, 2], [2, 4]] // dependent
-  assert_eq(rank_of(k, m0), 1)
-  let m1 : Array[Array[Int32]] = [[1, 0], [0, 1]]
-  assert_eq(rank_of(k, m1), 2)
-  let m2 : Array[Array[Int32]] = [[0, 0], [0, 0]]
-  assert_eq(rank_of(k, m2), 0)
-  assert_eq(rank_of(k, []), 0)
 }
 
 ///|

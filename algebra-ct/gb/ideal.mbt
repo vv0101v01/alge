@@ -60,52 +60,6 @@ fn mult_matrix(
 }
 
 ///|
-/// A `K`-basis of the row space of `rows` (Gaussian elimination).
-pub fn span_basis(k : Fp, rows : Array[Array[Int32]]) -> Array[Array[Int32]] {
-  let cols = if rows.length() == 0 { 0 } else { rows[0].length() }
-  let a = rows.map(r => r.copy())
-  let out : Array[Array[Int32]] = []
-  let mut r = 0
-  while r < a.length() {
-    let mut c = 0
-    let mut found = -1
-    while c < cols {
-      if found < 0 && k.is_nonzero(a[r][c]) {
-        found = c
-      }
-      c += 1
-    }
-    if found >= 0 {
-      let inv = k.inv(a[r][found])
-      let mut cc = 0
-      while cc < cols {
-        a[r][cc] = k.mul(a[r][cc], inv)
-        cc += 1
-      }
-      let mut rr = r + 1
-      while rr < a.length() {
-        if k.is_nonzero(a[rr][found]) {
-          let fct = a[rr][found]
-          let mut cc2 = 0
-          while cc2 < cols {
-            a[rr][cc2] = k.sub(a[rr][cc2], k.mul(fct, a[r][cc2]))
-            cc2 += 1
-          }
-        }
-        rr += 1
-      }
-      out.push(a[r].copy())
-    }
-    // Exactly one step per row: a pivot row *and* a zero row are both
-    // consumed.  Advancing twice after a pivot skipped the following row and
-    // silently truncated the basis (e.g. the identity matrix collapsed to its
-    // first row).
-    r += 1
-  }
-  out
-}
-
-///|
 /// Lift a coefficient vector on the standard monomial basis to a polynomial.
 fn coords_to_poly(
   k : Fp,
@@ -239,7 +193,7 @@ fn annihilator_ideal(
   let std = standard_monomials(b, n)
   let m = mult_matrix(b, std, n, g)
   let gen : Array[Poly] = []
-  for c in nullspace(k, m, std.length()) {
+  for c in @la.nullspace(k, m, std.length()) {
     let f = coords_to_poly(k, std, n, c)
     if !f.is_zero() {
       gen.push(f)
@@ -531,7 +485,7 @@ fn nilradical_basis(b : Basis, n : Int32) -> Array[Poly] {
     }
     mat.push(row)
   }
-  let ker = nullspace(b.k, mat, d)
+  let ker = @la.nullspace(b.k, mat, d)
   let out : Array[Poly] = []
   for c in ker {
     let mut f = Poly::zero_n(b.k, n)
@@ -543,95 +497,6 @@ fn nilradical_basis(b : Basis, n : Int32) -> Array[Poly] {
     if !f.is_zero() {
       out.push(f)
     }
-  }
-  out
-}
-
-///|
-/// Null space basis of the homogeneous system `M c = 0` over `K`,
-/// by Gauss-Jordan elimination with a lowest-nonzero-pivot convention.
-///
-/// `cols` is the number of unknowns.  It is passed explicitly because the
-/// empty system `M = []` carries no column information on its own, and the
-/// null space of a system without equations is all of `K^cols` -- reading
-/// `m[0]` would have panicked.
-pub fn nullspace(
-  k : Fp,
-  m : Array[Array[Int32]],
-  cols : Int32,
-) -> Array[Array[Int32]] {
-  let rows = m.length()
-  if rows == 0 {
-    let out : Array[Array[Int32]] = []
-    let mut c = 0
-    while c < cols {
-      let v = Array::make(cols, 0)
-      v[c] = 1
-      out.push(v)
-      c += 1
-    }
-    return out
-  }
-  let a = m.map(r => r.copy())
-  let pivots : Array[Int32] = []
-  // `pivot_rows[pi]` is the row of `a` whose pivot is `pivots[pi]`: the two
-  // must be tracked separately, because a rank-deficient row (a zero row, or
-  // one that became zero during elimination) is skipped and would otherwise
-  // shift the correspondence used in the back-substitution below.
-  let pivot_rows : Array[Int32] = []
-  let mut r = 0
-  while r < rows {
-    let mut c = 0
-    let mut found = -1
-    while c < cols {
-      if found < 0 && k.is_nonzero(a[r][c]) {
-        found = c
-      }
-      c += 1
-    }
-    if found >= 0 {
-      pivots.push(found)
-      pivot_rows.push(r)
-      let inv = k.inv(a[r][found])
-      let mut cc = 0
-      while cc < cols {
-        a[r][cc] = k.mul(a[r][cc], inv)
-        cc += 1
-      }
-      let mut rr = 0
-      while rr < rows {
-        if rr != r && k.is_nonzero(a[rr][found]) {
-          let fct = a[rr][found]
-          let mut cc2 = 0
-          while cc2 < cols {
-            a[rr][cc2] = k.sub(a[rr][cc2], k.mul(fct, a[r][cc2]))
-            cc2 += 1
-          }
-        }
-        rr += 1
-      }
-    }
-    r += 1
-  }
-  let is_pivot = Array::make(cols, false)
-  for p in pivots {
-    is_pivot[p] = true
-  }
-  let free : Array[Int32] = []
-  for c in 0..<cols {
-    if !is_pivot[c] {
-      free.push(c)
-    }
-  }
-  let out : Array[Array[Int32]] = []
-  for f in free {
-    let v = Array::make(cols, 0)
-    v[f] = 1
-    for pi in 0..<pivots.length() {
-      let p = pivots[pi]
-      v[p] = k.neg(a[pivot_rows[pi]][f])
-    }
-    out.push(v)
   }
   out
 }
@@ -810,6 +675,10 @@ fn is_univariate_last(f : Poly, n : Int32) -> Bool {
   let mut uses = false
   for kv in f.pairs(Lex) {
     let m = kv.0
+    // a polynomial built in fewer variables than `n` cannot be the last one
+    if m.length() < n {
+      return false
+    }
     if m[n - 1] > 0 {
       uses = true
     }

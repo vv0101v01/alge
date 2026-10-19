@@ -230,7 +230,7 @@ fn radical_basis(q : Quot, ps : Array[Array[Int32]]) -> Array[Array[Int32]] {
     rows.push(row)
     r += 1
   }
-  @gb.nullspace(q.k, rows, d)
+  @la.nullspace(q.k, rows, d)
 }
 
 ///|
@@ -265,7 +265,7 @@ fn socle_basis(q : Quot, rad : Array[Array[Int32]]) -> Array[Array[Int32]] {
     }
     ri += 1
   }
-  @gb.nullspace(q.k, sys, d)
+  @la.nullspace(q.k, sys, d)
 }
 
 ///|
@@ -283,7 +283,7 @@ fn mul_matrix(q : Quot, g : Array[Int32]) -> Array[Array[Int32]] {
   while i < d {
     let e = Array::make(d, 0)
     e[i] = 1
-    let ge = mul_coords(q, g, e)
+    let ge = q.mul_coords(g, e)
     let mut t = 0
     while t < d {
       m[t][i] = ge[t]
@@ -292,39 +292,6 @@ fn mul_matrix(q : Quot, g : Array[Int32]) -> Array[Array[Int32]] {
     i += 1
   }
   m
-}
-
-///|
-/// Coordinates of `u * v` in the standard monomial basis, from the frozen
-/// tensor.
-pub fn mul_coords(q : Quot, u : Array[Int32], v : Array[Int32]) -> Array[Int32] {
-  let d = q.dim
-  let res = Array::make(d, 0)
-  let mut i = 0
-  while i < d {
-    if u[i] != 0 {
-      let mut j = 0
-      while j < d {
-        if v[j] != 0 {
-          let coef = q.k.mul(u[i], v[j])
-          if coef != 0 {
-            let cell = i * d + j
-            let mut t = 0
-            while t < d {
-              let w = q.table[cell][t]
-              if w != 0 {
-                res[t] = q.k.add(res[t], q.k.mul(coef, w))
-              }
-              t += 1
-            }
-          }
-        }
-        j += 1
-      }
-    }
-    i += 1
-  }
-  res
 }
 
 ///|
@@ -342,64 +309,7 @@ fn ext1_at(k : Fp, n : Int32, gens : Array[Poly], pt : Array[Int32]) -> Int32 {
     rows.push(row)
     v += 1
   }
-  n - rank_of(k, rows)
-}
-
-///|
-/// Rank of a row echelon form computation over `K`.
-fn rank_of(k : Fp, m : Array[Array[Int32]]) -> Int32 {
-  let rows = m.length()
-  if rows == 0 {
-    return 0
-  }
-  let cols = m[0].length()
-  let a : Array[Array[Int32]] = []
-  let mut ri = 0
-  while ri < rows {
-    a.push(m[ri].copy())
-    ri += 1
-  }
-  let mut rank = 0
-  let mut r = 0
-  while r < rows && rank < cols {
-    // pivot search
-    let mut piv = -1
-    let mut rr = r
-    while rr < rows {
-      if a[rr][rank] != 0 {
-        piv = rr
-        break
-      }
-      rr += 1
-    }
-    if piv < 0 {
-      rank += 1
-      continue
-    }
-    let tmp = a[r]
-    a[r] = a[piv]
-    a[piv] = tmp
-    let inv = k.inv(a[r][rank])
-    let mut c = rank
-    while c < cols {
-      a[r][c] = k.mul(a[r][c], inv)
-      c += 1
-    }
-    let mut rr = 0
-    while rr < rows {
-      if rr != r && a[rr][rank] != 0 {
-        let f = a[rr][rank]
-        let mut c = rank
-        while c < cols {
-          a[rr][c] = k.sub(a[rr][c], k.mul(f, a[r][c]))
-          c += 1
-        }
-      }
-      rr += 1
-    }
-    r += 1
-  }
-  r
+  n - @la.rank(k, rows)
 }
 
 ///|
@@ -416,7 +326,7 @@ fn frobenius_matrix(q : Quot) -> Array[Array[Int32]] {
     let mut acc = e
     let mut step = 1
     while step < q.k.p {
-      acc = mul_coords(q, acc, e)
+      acc = q.mul_coords(acc, e)
       step += 1
     }
     cols.push(acc)
@@ -445,10 +355,10 @@ pub fn frobenius_fixed(q : Quot, m : Int32) -> Int32 {
   let d = q.dim
   let f = frobenius_matrix(q)
   // F^m as a matrix, then dim of its `1`-eigenspace = rank(F^m - 1).
-  let mut cur = identity(d)
+  let mut cur = @la.identity(d)
   let mut step = 0
   while step < m {
-    cur = mat_mul(q.k, cur, f)
+    cur = @la.mat_mul(q.k, cur, f)
     step += 1
   }
   let diff : Array[Array[Int32]] = []
@@ -463,50 +373,7 @@ pub fn frobenius_fixed(q : Quot, m : Int32) -> Int32 {
     diff.push(row)
     i += 1
   }
-  d - rank_of(q.k, diff)
-}
-
-///|
-fn identity(d : Int32) -> Array[Array[Int32]] {
-  let m : Array[Array[Int32]] = []
-  let mut i = 0
-  while i < d {
-    let row = Array::make(d, 0)
-    row[i] = 1
-    m.push(row)
-    i += 1
-  }
-  m
-}
-
-///|
-fn mat_mul(
-  k : Fp,
-  a : Array[Array[Int32]],
-  b : Array[Array[Int32]],
-) -> Array[Array[Int32]] {
-  let d = a.length()
-  let out : Array[Array[Int32]] = []
-  let mut i = 0
-  while i < d {
-    let row = Array::make(d, 0)
-    let mut j = 0
-    while j < d {
-      let mut acc = 0
-      let mut t = 0
-      while t < d {
-        if a[i][t] != 0 && b[t][j] != 0 {
-          acc = k.add(acc, k.mul(a[i][t], b[t][j]))
-        }
-        t += 1
-      }
-      row[j] = acc
-      j += 1
-    }
-    out.push(row)
-    i += 1
-  }
-  out
+  d - @la.rank(q.k, diff)
 }
 
 ///|

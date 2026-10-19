@@ -1,6 +1,6 @@
 # spec for arena/algebra -- the compile-time input of the `gen` rules.
 #
-# two zero-dimensional systems over a finite field K = GF(p):
+# three zero-dimensional systems over a finite field K = GF(p):
 #
 #  1. "cub" : K[x] / ((x-1)(x-2)(x-3))     p = 97, n = 1
 #             three reduced points; A is semisimple, A = K^3, so the
@@ -10,6 +10,16 @@
 #             one non-reduced point at the origin; the maximal ideal
 #             m = (x,y) has m^2 = 0, edim = 2 > dim = 0, so the local ring
 #             is Artinian and NOT regular.
+#
+#  3. "wild": K[x,y] / (x^2 - 1, y^2 - 1)   p = 2, n = 2
+#             x^2 - 1 = (x-1)^2 in char 2, so there is a single point (1,1)
+#             and the ring is local of dimension 4; it IS the group algebra
+#             F_2[C_2 x C_2].  This is the only table with non-trivial
+#             group cohomology
+#             (KIND = 1, GROUP_ORDER = 4, GROUP_RANK = 2, b_i = i + 1).
+#             NOTE: over F_2 the generator x^2 - 1 must be written as ONE
+#             polynomial "2.0:1|0.0:-1"; splitting it into x^2 and -1 would
+#             generate the unit ideal (1) in F_2.
 #
 # term syntax inside the `gen` arguments:
 #   exponents "e0.e1...:coefficient", terms separated by '|', polynomials by ';'

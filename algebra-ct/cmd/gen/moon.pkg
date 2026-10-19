@@ -1,6 +1,5 @@
 import {
   "arena/algebra-ct/poly",
-  "arena/algebra-ct/gb",
   "arena/algebra-ct/quot",
   "arena/algebra-ct/emit",
   "arena/algebra-ct/coho",
