@@ -1,6 +1,6 @@
 # spec for arena/algebra -- the compile-time input of the `gen` rules.
 #
-# three zero-dimensional systems over a finite field K = GF(p):
+# four zero-dimensional systems over a finite field K = GF(p):
 #
 #  1. "cub" : K[x] / ((x-1)(x-2)(x-3))     p = 97, n = 1
 #             three reduced points; A is semisimple, A = K^3, so the
@@ -17,9 +17,22 @@
 #             F_2[C_2 x C_2].  This is the only table with non-trivial
 #             group cohomology
 #             (KIND = 1, GROUP_ORDER = 4, GROUP_RANK = 2, b_i = i + 1).
+#  4. "mix" : K[x,y] / (x^2 - y, y^3)     p = 3, n = 2
+#             the non-HOMOGENEOUS counterexample table (T12/T13): its
+#             standard-monomial basis {1, y, y^2, x, xy, xy^2} is not
+#             graded, so the Hilbert function [1,2,2,1] and the Loewy
+#             series [1,1,1,1,1,1] disagree although both sum to D = 6.
+#             It is also a 0-dimensional local ring with dim socle = 1
+#             which is NOT regular (EDIM = 1, m is principal, D = 6),
+#             refuting the naive discriminator "dim_k socle = 1".
 #             NOTE: over F_2 the generator x^2 - 1 must be written as ONE
 #             polynomial "2.0:1|0.0:-1"; splitting it into x^2 and -1 would
 #             generate the unit ideal (1) in F_2.
+#
+# the fourth table `mix` refutes two naive discriminators (T12/T13); its
+# frozen categorified layer is hilbert = [1,2,2,1] but loewy = [1,1,1,1,1,1]
+# (both sum to D = 6) and pt_kind = [2] (dim soc = 1, dim m = 5: neither a
+# field nor Gorenstein).
 #
 # categorified layer (T19): for each system `gen` also freezes the graded
 # objects themselves, not only their dimensions -- `hilbert` (Hilbert

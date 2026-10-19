@@ -139,6 +139,16 @@ fn categorised(cat : Cat) -> String {
   s.write_string("\npub let kozul_lens : Array[Int] = [")
   s.write_string(list_of(cat.kozul_lens))
   s.write_string("]\n")
+  s.write_string(
+    "\n/// Kind of each local factor, read off its Loewy block: 0 = a field\n/// (`m_p = 0`), 1 = Gorenstein but not a field (`soc A_p = m_p != 0`),\n/// 2 = neither.  See ALGEBRA.md T13: the naive discriminator\n/// `dim_k socle = 1` is FALSE for zero-dimensional local rings.\n",
+  )
+  s.write_string("pub let pt_kind : Array[Int] = [")
+  let kinds = []
+  for p in 0..<cat.nfactors {
+    kinds.push(cat.pt_kind_point(p))
+  }
+  s.write_string(list_of(kinds))
+  s.write_string("]\n")
   s.write_string("pub const NPOINTS_CAT : Int = ")
   s.write_string(cat.nfactors.to_string())
   s.write_string("\n\n")

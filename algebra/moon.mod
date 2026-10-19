@@ -22,3 +22,8 @@ rule(
   name: "gen-wild",
   command: "moon -C ../algebra-ct run cmd/gen --p 2 --n 2 --terms \"2.0:1|0.0:-1;0.2:1|0.0:-1\" --name wild > $output",
 )
+
+rule(
+  name: "gen-mix",
+  command: "moon -C ../algebra-ct run cmd/gen --p 3 --n 2 --terms \"2.0:1|0.1:-1;0.3:1\" --name mix > $output",
+)

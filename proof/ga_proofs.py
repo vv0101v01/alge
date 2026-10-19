@@ -34,7 +34,8 @@ def read_tables(path):
             out[key] = int(m.group(1))
     out["LOCAL"] = "pub const LOCAL : Bool = true" in src
     for key in ["basis", "mul_tensor", "points", "betti",
-                "hilbert", "loewy", "loewy_lens", "kozul", "kozul_lens"]:
+                "hilbert", "loewy", "loewy_lens", "kozul", "kozul_lens",
+                "pt_kind"]:
         m = re.search(r"pub let %s : Array\[Int\] = \[([^\]]*)\]" % key, src, re.S)
         if m:
             out[key] = [int(x) for x in m.group(1).split(",") if x.strip()]
@@ -49,6 +50,7 @@ def read_tables(path):
 CUB = read_tables(ROOT + "/tables_cub/tables.mbt")
 FAT = read_tables(ROOT + "/tables_fat/tables.mbt")
 WILD = read_tables(ROOT + "/tables_wild/tables.mbt")
+MIX = read_tables(ROOT + "/tables_mix/tables.mbt")
 
 
 # --------------------------------------------------------------- the ring ---
@@ -732,7 +734,7 @@ def gen_terms():
     table is; reading the `--terms` argument from it means the certificates
     quantify over the *same* ideal the compile-time engine was run on.
     """
-    src = open("/home/user/algebra/algebra/moon.mod").read()
+    src = open(os.path.join(ROOT, "..", "moon.mod")).read()
     out = {}
     for m in re.finditer(
             r'name: "gen-(\w+)".*?--p (\d+) --n (\d+) --terms \\"([^\\"]*)\\" --name (\w+)',
@@ -779,7 +781,8 @@ def ext1_jacobian(A, tag):
     Ext^1_A(K,K) for a zero-dimensional K-algebra.
     """
     p, n = A.p, A.n
-    rule_name = {"cub": "cub", "fat": "fatpoint", "wild": "wild"}[tag]
+    rule_name = {"cub": "cub", "fat": "fatpoint", "wild": "wild",
+                 "mix": "mix"}[tag]
     _, _, polys = gen_terms()[rule_name]
     pts = pts_of(A, globals()[tag.upper()])
     total = 0
@@ -868,7 +871,7 @@ def run_coho():
     the frozen constant.
     """
     global MOD
-    for tag, tab in (("cub", CUB), ("fat", FAT), ("wild", WILD)):
+    for tag, tab in (("cub", CUB), ("fat", FAT), ("wild", WILD), ("mix", MIX)):
         MOD = tab["P"]
         A = Alg(tab)
         p, d, n = A.p, A.d, A.n
@@ -956,22 +959,22 @@ def run_coho():
                 "Frobenius ⇔ 有理點: dim Fix(Frob) = NPOINTS = #K-有理點",
                 int_eq(tab["FROB_FIXED"], tab["NPOINTS"]))
 
-        # ---- T10/T11: group algebra, socle, Betti numbers --------------------
+        # ---- T9/T10/T11: group algebra (T9), Frobenius (T10), cohomology (T11)
         g, r = tab["GROUP_ORDER"], tab["GROUP_RANK"]
         if g:
-            theorem("T11.%s.group_order" % tag,
+            theorem("T9.%s.group_order" % tag,
                     "群代數: A = K[G] 且 |G| = p^r = D = GROUP_ORDER",
                     int_eq(tab["D"], g))
-            theorem("T11.%s.group_dim" % tag,
+            theorem("T9.%s.group_dim" % tag,
                     "Cauchy: dim_K K[G] = |G|, 故 D = p^r (r = GROUP_RANK)",
                     int_eq(g, p ** r))
-            theorem("T11.%s.edim" % tag,
+            theorem("T9.%s.edim" % tag,
                     "edim(K[G]) = r = GROUP_RANK (Jacobson 基底 x_1-1,...,x_r-1)",
                     int_eq(tab["EDIM"], r))
-            theorem("T11.%s.socle_one" % tag,
+            theorem("T9.%s.socle_one" % tag,
                     "soc(K[G]) = K[G]·N (N = Σ_{g∈G} g): 底環一維, SOCLE_DIM = 1",
                     int_eq(tab["SOCLE_DIM"], 1))
-            theorem("T11.%s.rad_augmentation" % tag,
+            theorem("T9.%s.rad_augmentation" % tag,
                     "rad K[G] = 增廣理想 I(G), 維數 |G| - 1 = RAD_DIM",
                     int_eq(tab["RAD_DIM"], g - 1))
             theorem("T11.%s.betti" % tag,
@@ -996,7 +999,7 @@ def run_coho():
                     z3.And(*[int_gt0(tab["betti"][i])
                              for i in range(1, tab["NBETTI"])]))
             norm = norm_element(A)
-            theorem("T11.%s.socle_norm" % tag,
+            theorem("T9.%s.socle_norm" % tag,
                     "N = Σ_{g∈G} g ≠ 0 且 N^2 = |G|·N = 0 (char p 下 p | |G|), "
                     "故 N ∈ Soc(K[G]) 並生成它",
                     z3.And(eqv([zint(v) for v in norm], norm),

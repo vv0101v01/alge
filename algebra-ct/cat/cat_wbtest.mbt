@@ -57,6 +57,18 @@ fn wild_ring() -> (Quot, Array[Array[Int32]]) {
 }
 
 ///|
+/// `mix` -- `K[x,y] / (x^2 - y, y^3)` over `F_3`: `D = 6`, one point, local,
+/// `m = (x)` principal.  The non-homogeneous counterexample of T12/T13.
+fn mix_ring() -> (Quot, Array[Array[Int32]]) {
+  let k = Fp::new(3)
+  let x = @poly.Poly::var_n(k, 2, 0)
+  let y = @poly.Poly::var_n(k, 2, 1)
+  let g1 = x.mul(x).sub(y)
+  let g2 = y.mul(y).mul(y)
+  ring(k, 2, [g1, g2])
+}
+
+///|
 /// The number of entries of `d^i` that survive in `d^i * d^{i+1}`; zero for
 /// every `i` is the assertion that the Koszul matrices form a complex, which
 /// is the whole reason the cohomology below is a cohomology.
@@ -321,4 +333,81 @@ test "T19: the frozen blocks of the three tables have the expected shapes" {
   assert_eq(e.loewy_point(2), [1])
   assert_eq(e.kozul_point(1), [1])
   assert_eq(e.mdim(0), 0)
+}
+
+///|
+/// T12: the Loewy series equals the Hilbert function exactly when the
+/// standard-monomial basis is graded, i.e. when the ideal is homogeneous.
+test "T12: hilbert = loewy for homogeneous ideals, and mix breaks it" {
+  // fat, wild: homogeneous ideals, graded standard basis -> equal series
+  let (q1, ps1) = fat_ring()
+  let f = categorify(q1, ps1)
+  assert_eq(f.hilbert, f.loewy)
+  let (q2, ps2) = wild_ring()
+  let w = categorify(q2, ps2)
+  assert_eq(w.hilbert, w.loewy)
+  // mix: I = (x^2 - y, y^3) is not homogeneous, the standard basis
+  // {1, y, y^2, x, xy, xy^2} is not graded, and the series differ
+  let (q3, ps3) = mix_ring()
+  let m = categorify(q3, ps3)
+  assert_eq(m.hilbert_total(), 6)
+  let mut tot = 0
+  for x in m.loewy {
+    tot += x
+  }
+  assert_eq(tot, 6) // both still sum to D
+  assert_eq(m.hilbert, [1, 2, 2, 1])
+  assert_eq(m.loewy, [1, 1, 1, 1, 1, 1])
+  assert_true(m.hilbert != m.loewy)
+}
+
+///|
+/// T13: the socle trichotomy read off the Loewy block, and the refutation of
+/// "dim_k socle = 1 implies regular" by the zero-dimensional ring `mix`.
+test "T13: pointwise socle trichotomy" {
+  // a field: m = 0
+  let (q0, ps0) = cub_ring()
+  let c = categorify(q0, ps0)
+  for p in 0..<c.nfactors {
+    assert_eq(c.pt_kind_point(p), 0)
+  }
+  // fat: soc = m, both dim 2 -> Gorenstein, not a field
+  let (q1, ps1) = fat_ring()
+  let f = categorify(q1, ps1)
+  assert_eq(f.pt_kind_point(0), 1)
+  assert_eq(f.socle(0), f.mdim(0))
+  // wild: soc dim 1 < m dim 3 -> neither
+  let (q2, ps2) = wild_ring()
+  let w = categorify(q2, ps2)
+  assert_eq(w.pt_kind_point(0), 2)
+  assert_true(w.socle(0) < w.mdim(0))
+  // mix: soc dim 1, m dim 5 -> neither; the naive discriminator fails here
+  let (q3, ps3) = mix_ring()
+  let m = categorify(q3, ps3)
+  assert_eq(m.pt_kind_point(0), 2)
+  assert_eq(m.socle(0), 1)
+  assert_eq(m.mdim(0), 5)
+  assert_eq(m.dim_at(0), 6)
+}
+
+///|
+/// T15: the Euler characteristic of the parameter cohomology is 1 for a field
+/// and 0 otherwise -- with no regularity hypothesis, because the Euler
+/// characteristic of a complex equals that of its homology.
+test "T15: kozul Euler characteristic" {
+  let (q0, ps0) = cub_ring()
+  let c = categorify(q0, ps0)
+  for p in 0..<c.nfactors {
+    assert_eq(c.kozul_euler(p), 1) // (1-1)^0
+    assert_eq(c.pt_kind_point(p), 0)
+  }
+  let (q1, ps1) = fat_ring()
+  let f = categorify(q1, ps1)
+  assert_eq(f.kozul_euler(0), 0) // 1 - 3 + 2
+  let (q2, ps2) = wild_ring()
+  let w = categorify(q2, ps2)
+  assert_eq(w.kozul_euler(0), 0) // 1 - 3 + 3 - 1
+  let (q3, ps3) = mix_ring()
+  let m = categorify(q3, ps3)
+  assert_eq(m.kozul_euler(0), 0) // 1 - 5 + 10 - 10 + 5 - 1
 }

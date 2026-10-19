@@ -1,0 +1,4 @@
+import {
+}
+
+dev_build(rule: "gen-mix", input: "spec.txt", output: "tables.mbt")

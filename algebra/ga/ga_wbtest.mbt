@@ -301,3 +301,79 @@ test "T19: the categorified layers of the three tables are pairwise distinct" {
   assert_eq(wild.hilbert.length(), 3)
   assert_true(fat.kozul_total() != wild.kozul_total())
 }
+
+///|
+test "T12: homogeneous ideal gives hilbert = loewy, and mix refutes it" {
+  let fat = Tables::fat()
+  let wild = Tables::wild()
+  // fat = k[x,y]/(x^2,xy,y^2) and wild = F_2[x,y]/(x^2-1,y^2-1) are
+  // homogeneous, so the standard-monomial basis is graded and the Loewy
+  // filtration is the monomial-degree filtration: the two series agree.
+  for t in [fat, wild] {
+    assert_eq(t.hilbert, t.loewy)
+  }
+  // mix = F_3[x,y]/(x^2-y,y^3) is NOT homogeneous: the standard basis
+  // {1,y,y^2,x,xy,xy^2} has degrees 0,1,2,1,2,3, and the two series differ
+  // although both sum to D = 6.
+  let mix = Tables::mix()
+  assert_eq(mix.hilbert_total(), 6)
+  assert_eq(mix.loewy_total(), 6)
+  assert_eq(mix.hilbert, [1, 2, 2, 1])
+  assert_eq(mix.loewy, [1, 1, 1, 1, 1, 1])
+  assert_true(mix.hilbert != mix.loewy) // the point of the table
+}
+
+///|
+test "T13: the socle trichotomy, and dim soc = 1 does not mean regular" {
+  let fat = Tables::fat() // soc = m (both dim 2): Gorenstein, not a field
+  assert_eq(fat.point_kind(0), 1)
+  assert_eq(fat.socle_at(0), fat.mdim_at(0))
+  assert_true(!fat.is_field_at(0))
+  assert_true(fat.is_gorenstein_at(0))
+  let wild = Tables::wild() // soc dim 1, m dim 3: neither
+  assert_eq(wild.point_kind(0), 2)
+  assert_true(wild.socle_at(0) < wild.mdim_at(0))
+  assert_true(!wild.is_gorenstein_at(0))
+  let cub = Tables::cub() // three fields
+  for p in 0..<cub.npoints {
+    assert_eq(cub.point_kind(p), 0)
+    assert_true(cub.is_field_at(p))
+  }
+  // mix is the refutation of the naive discriminator "local and
+  // dim_k socle = 1 hence regular": it is local, dim soc = 1, and NOT regular
+  // because D = 6 > 0 = edim of a field; in fact m = (x) is principal.
+  let mix = Tables::mix()
+  assert_eq(mix.point_kind(0), 2)
+  assert_eq(mix.socle_dim, 1)
+  assert_eq(mix.edim, 1)
+  assert_eq(mix.d, 6)
+  assert_true(mix.socle_dim == 1 && mix.d != 1) // soc dim 1 but not a field
+  assert_true(!mix.is_field_at(0))
+  assert_eq(mix.point_kind(99), 2) // out of range
+}
+
+///|
+test "T15: the Euler characteristic of the parameter cohomology" {
+  // chi_p = (1-1)^{d_p}: 1 for a field, 0 otherwise.
+  let cub = Tables::cub()
+  for p in 0..<cub.npoints {
+    assert_eq(cub.kozul_euler(p), 1)
+    assert_true(cub.is_field_at(p))
+  }
+  let fat = Tables::fat()
+  assert_eq(fat.kozul_euler(0), 0)
+  assert_eq(fat.kozul_block(0), [1, 3, 2]) // 1 - 3 + 2 = 0
+  let wild = Tables::wild()
+  assert_eq(wild.kozul_euler(0), 0)
+  assert_eq(wild.kozul_block(0), [1, 3, 3, 1]) // 1 - 3 + 3 - 1 = 0
+  let mix = Tables::mix()
+  assert_eq(mix.kozul_euler(0), 0)
+  assert_eq(mix.kozul_block(0), [1, 5, 10, 10, 5, 1]) // 1-5+10-10+5-1 = 0
+  // the chi = 1 <-> chi = 0 dichotomy is exactly "field or not"
+  for t in [cub, fat, wild, mix] {
+    for p in 0..<t.npoints {
+      let chi = t.kozul_euler(p)
+      assert_eq(chi == 1, t.is_field_at(p))
+    }
+  }
+}

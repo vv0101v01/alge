@@ -56,6 +56,12 @@ pub const NKOSZUL : Int = 3
 pub let kozul : Array[Int] = [1, 3, 2]
 
 pub let kozul_lens : Array[Int] = [3]
+
+/// Kind of each local factor, read off its Loewy block: 0 = a field
+/// (`m_p = 0`), 1 = Gorenstein but not a field (`soc A_p = m_p != 0`),
+/// 2 = neither.  See ALGEBRA.md T13: the naive discriminator
+/// `dim_k socle = 1` is FALSE for zero-dimensional local rings.
+pub let pt_kind : Array[Int] = [1]
 pub const NPOINTS_CAT : Int = 1
 
 /// `c * d'` for two coordinate vectors: one table read per nonzero term.

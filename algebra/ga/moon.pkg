@@ -4,5 +4,6 @@ import {
   // white-box tests never add an import of their own.
   "arena/algebra/ga/tables_cub",
   "arena/algebra/ga/tables_fat",
+  "arena/algebra/ga/tables_mix",
   "arena/algebra/ga/tables_wild",
 }

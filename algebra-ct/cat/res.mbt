@@ -584,6 +584,50 @@ pub fn Cat::hilbert_total(self : Cat) -> Int32 {
 }
 
 ///|
+/// The kind of the `p`-th local factor, from the Loewy block alone:
+/// `0` = a field (`m_p = 0`), `1` = Gorenstein but not a field
+/// (`soc A_p = m_p ≠ 0`), `2` = neither.  This is the pointwise version of
+/// the socle trichotomy (T13): it is read off `gr^0 A_p = 1`,
+/// `dim_k m_p = Σ_{i≥1}` and `dim_k soc A_p` = last entry, so it needs no
+/// hypothesis about regular sequences.
+pub fn Cat::pt_kind_point(self : Cat, p : Int32) -> Int32 {
+  let b = self.loewy_point(p)
+  if b.length() == 0 {
+    return 2
+  }
+  let m = sum_of(b) - b[0]
+  if m == 0 {
+    0
+  } else if b[b.length() - 1] == m {
+    1
+  } else {
+    2
+  }
+}
+
+///|
+/// The Euler characteristic of `p` of the parameter cohomology,
+/// `chi_p = Σ_i (-1)^i dim_k H^i(A_p)`.  Since the Euler characteristic of a
+/// finite complex equals that of its homology, and the Koszul complex on the
+/// `d_p` generators has chain dimensions `C(d_p, i)`, one gets
+/// `chi_p = (1-1)^{d_p}`: hence `chi_p = 1` for a field and `chi_p = 0`
+/// otherwise (T15).  No regularity assumption is used -- which is exactly
+/// why this is a valid certificate that the differentials really square to
+/// zero.
+pub fn Cat::kozul_euler(self : Cat, p : Int32) -> Int32 {
+  let b = self.kozul_point(p)
+  let acc = Array::make(1, 0)
+  for i in 0..<b.length() {
+    if i % 2 == 0 {
+      acc[0] += b[i]
+    } else {
+      acc[0] -= b[i]
+    }
+  }
+  acc[0]
+}
+
+///|
 /// `dim_k A_p` read off the Loewy block: the Loewy filtration of an Artinian
 /// local ring is exhaustive, so its layers sum to `dim_k A_p`.
 pub fn Cat::dim_at(self : Cat, p : Int32) -> Int32 {

@@ -63,6 +63,9 @@ pub(all) struct Tables {
   kozul : Array[Int32]
   /// length of each parameter cohomology block
   kozul_lens : Array[Int32]
+  /// kind of each local factor: `0` = field, `1` = Gorenstein non-field,
+  /// `2` = neither (T13)
+  pt_kind : Array[Int32]
 }
 
 ///|
@@ -656,6 +659,7 @@ pub fn Tables::cub() -> Tables {
     loewy_lens: @tables_cub.loewy_lens,
     kozul: @tables_cub.kozul,
     kozul_lens: @tables_cub.kozul_lens,
+    pt_kind: @tables_cub.pt_kind,
   }
 }
 
@@ -690,6 +694,7 @@ pub fn Tables::fat() -> Tables {
     loewy_lens: @tables_fat.loewy_lens,
     kozul: @tables_fat.kozul,
     kozul_lens: @tables_fat.kozul_lens,
+    pt_kind: @tables_fat.pt_kind,
   }
 }
 
@@ -724,6 +729,47 @@ pub fn Tables::wild() -> Tables {
     loewy_lens: @tables_wild.loewy_lens,
     kozul: @tables_wild.kozul,
     kozul_lens: @tables_wild.kozul_lens,
+    pt_kind: @tables_wild.pt_kind,
+  }
+}
+
+///|
+/// The non-homogeneous counterexample table `A = K[x,y]/(x^2 - y, y^3)` over
+/// `K = F_3`: local, with `dim_k A = 6`, `m` principal (`EDIM = 1`) and
+/// `dim_k soc A = 1`.
+///
+/// It is frozen for two reasons (T12/T13).  (i) Its standard-monomial basis
+/// `{1, y, y^2, x, xy, xy^2}` is **not** graded, so the Hilbert function
+/// `[1,2,2,1]` and the Loewy series `[1,1,1,1,1,1]` disagree although both sum
+/// to `D = 6`; for a homogeneous ideal the two agree.  (ii) `dim_k soc A = 1`
+/// but `A` is **not** regular, refuting the naive discriminator
+/// "local and `dim_k socle = 1` hence regular" (ALGEBRA.md 2.8).
+pub fn Tables::mix() -> Tables {
+  {
+    p: @tables_mix.P,
+    d: @tables_mix.D,
+    nvar: @tables_mix.NVAR,
+    basis: @tables_mix.basis,
+    mul_tensor: @tables_mix.mul_tensor,
+    points: @tables_mix.points,
+    npoints: @tables_mix.NPOINTS,
+    is_local: @tables_mix.LOCAL,
+    edim: @tables_mix.EDIM,
+    rad_dim: @tables_mix.RAD_DIM,
+    socle_dim: @tables_mix.SOCLE_DIM,
+    cotangent_dim: @tables_mix.COTANGENT_DIM,
+    ext1_dim: @tables_mix.EXT1_DIM,
+    frob_fixed: @tables_mix.FROB_FIXED,
+    group_order: @tables_mix.GROUP_ORDER,
+    group_rank: @tables_mix.GROUP_RANK,
+    kind: @tables_mix.KIND,
+    betti: @tables_mix.betti,
+    hilbert: @tables_mix.hilbert,
+    loewy: @tables_mix.loewy,
+    loewy_lens: @tables_mix.loewy_lens,
+    kozul: @tables_mix.kozul,
+    kozul_lens: @tables_mix.kozul_lens,
+    pt_kind: @tables_mix.pt_kind,
   }
 }
 
@@ -853,6 +899,58 @@ pub fn Tables::kozul_total(self : Tables) -> Int32 {
   let mut acc = 0
   for x in self.kozul {
     acc += x
+  }
+  acc
+}
+
+///|
+/// The kind of the `p`-th local factor (frozen, T13): `0` = a field,
+/// `1` = Gorenstein but not a field, `2` = neither.
+///
+/// **Theorem (T13, socle trichotomy).**  For an Artin local factor `A_p`:
+/// `A_p = K` (`m_p = 0`) iff `soc A_p = A_p`; `A_p` is Gorenstein and not a
+/// field iff `soc A_p = m_p`, i.e. `dim_k soc A_p = dim_k m_p`; otherwise it
+/// is neither.  Note the *negative* direction that the naive reading misses:
+/// `dim_k soc A_p = 1` does **not** imply regularity (`mix` has
+/// `dim_k soc = 1`, `dim_k m = 5`, `edim = 1`, `D = 6`).
+pub fn Tables::point_kind(self : Tables, p : Int32) -> Int32 {
+  if p < 0 || p >= self.pt_kind.length() {
+    return 2
+  }
+  self.pt_kind[p]
+}
+
+///|
+/// `true` iff `A_p` is a field (`m_p = 0`), the pointwise "regular" test for
+/// zero-dimensional rings: unlike `dim_k soc A_p = 1` it cannot be fooled.
+pub fn Tables::is_field_at(self : Tables, p : Int32) -> Bool {
+  self.point_kind(p) == 0
+}
+
+///|
+/// `true` iff `A_p` is a Gorenstein local ring, i.e. `soc A_p = m_p`.
+pub fn Tables::is_gorenstein_at(self : Tables, p : Int32) -> Bool {
+  self.point_kind(p) <= 1
+}
+
+///|
+/// The Euler characteristic `chi_p = sum_i (-1)^i dim_k H^i(A_p)` of the
+/// parameter cohomology of the `p`-th local factor.
+///
+/// **Theorem (T15).**  `chi_p = (1-1)^{d_p}` where `d_p` is the number of
+/// generators of `m_p`, because the Euler characteristic of a finite complex
+/// equals that of its homology and the Koszul chain dimensions are
+/// `C(d_p, i)`.  Hence `chi_p = 1` iff `A_p` is a field and `chi_p = 0`
+/// otherwise -- on every table, with no regularity hypothesis.  `O(L_p)`.
+pub fn Tables::kozul_euler(self : Tables, p : Int32) -> Int32 {
+  let b = self.kozul_block(p)
+  let mut acc = 0
+  for i in 0..<b.length() {
+    if i % 2 == 0 {
+      acc += b[i]
+    } else {
+      acc -= b[i]
+    }
   }
   acc
 }

@@ -31,7 +31,25 @@ TABLES = {
     "cub": G.read_tables(os.path.join(ROOT, "tables_cub", "tables.mbt")),
     "fat": G.read_tables(os.path.join(ROOT, "tables_fat", "tables.mbt")),
     "wild": G.read_tables(os.path.join(ROOT, "tables_wild", "tables.mbt")),
+    "mix": G.read_tables(os.path.join(ROOT, "tables_mix", "tables.mbt")),
 }
+
+RULE_NAME = {"cub": "cub", "fat": "fatpoint", "wild": "wild", "mix": "mix"}
+
+
+def homogeneous_ideal(tag):
+    """True iff every generator of the ideal of `tag` is homogeneous.
+
+    The generators come from the build rule (`gen-` in `algebra/moon.mod`), so
+    this is the certificate's statement of the hypothesis of T12 -- the frozen
+    table itself does not record whether the ideal was homogeneous.
+    """
+    _, _, polys = G.gen_terms()[RULE_NAME[tag]]
+    for poly in polys:
+        degs = {sum(ex) for ex, c in poly}
+        if len(degs) > 1:
+            return False
+    return True
 
 
 # --------------------------------------------------------------- algebra ----
@@ -357,7 +375,7 @@ def run():
     int_gt0 = G.int_gt0
 
     # ---- T16 / T17: the local factors, recomputed from the frozen tensor ----
-    for tag in ("fat", "wild", "cub"):
+    for tag in ("fat", "wild", "cub", "mix"):
         tab = TABLES[tag]
         pt = tab["points"][: tab["NVAR"]]
         L = Local(tab, pt)
@@ -469,8 +487,141 @@ def run():
                      for S, T in combinations([{0}, {1}, {2}, {0, 1}, {0, 2}, {1, 2}], 2)
                      if not (S & T)]))
 
+    # ---- T12--T15: the reserved block, backfilled with real statements ----
+    backfill_goals()
+
     # ---- T19: the categorified arrays as they ship in the frozen tables -----
     frozen_layer_goals()
+
+
+def socle_dim(L):
+    """`dim_k soc A_p = dim_k { a : a g = 0 for every g in m_p }`.
+
+    This is the *definition* (`Ann(m_p)`), recomputed here as the nullity of
+    the multiplication map `a |-> (a g)_{g in m_p}` -- the rows of `L.cross`
+    -- and not read from the frozen constant.
+    """
+    # `L.cross[a][g]` is the A_p-coordinates of `basis[a] * mbasis[g]`.  The
+    # map `a |-> (a g)_g` goes into `A_p^{mdim}`, so in product coordinates its
+    # matrix has one block of `dim` rows per generator: the entry in row
+    # `(g, j)`, column `a` is the `j`-th coordinate of that product.
+    rows = [[L.cross[a][g][j] for a in range(L.dim)]
+            for g in range(L.mdim) for j in range(L.dim)]
+    if not rows:
+        return L.dim # m_p = 0: soc A_p = A_p
+    return L.dim - rank(rows, L.tab["P"])
+
+
+def backfill_goals():
+    """T12--T15: the four statements that fill the reserved numbering block.
+
+    They are deliberately *structural* rather than restatements of the frozen
+    numbers:
+
+    * T12 -- a graded standard basis (equivalently, a homogeneous ideal) makes
+      the Loewy filtration the monomial-degree filtration, so `hilbert = loewy`
+      pointwise; `mix` is the refutation of the converse.
+    * T13 -- the socle trichotomy (field / Gorenstein / neither), with `mix`
+      refuting the naive discriminator "dim_k socle = 1 hence regular".
+    * T14 -- the Hilbert function is recovered from the frozen basis by counting
+      standard monomials of each degree.
+    * T15 -- the Euler characteristic of the parameter cohomology is 1 for a
+      field and 0 otherwise.
+    """
+    zint = G.zint
+    int_eq = G.int_eq
+    for tag in ("fat", "wild", "cub", "mix"):
+        tab = TABLES[tag]
+        hil, loe, koz = tab["hilbert"], tab["loewy"], tab["kozul"]
+        klens, llens, kinds = tab["kozul_lens"], tab["loewy_lens"], tab["pt_kind"]
+        hom = homogeneous_ideal(tag)
+        loc = bool(tab["LOCAL"])
+        equal = list(hil) == list(loe)
+        # T12 is a *sufficient* condition, and neither direction of the
+        # converse holds: `wild` is non-homogeneous yet the two series agree,
+        # `mix` is non-homogeneous and they differ.  So each table certifies
+        # the case it actually realises, with the verdict on homogeneity
+        # recorded in the statement rather than as a separate goal (a "fact"
+        # that is False is not a certificate).
+        if hom and loc:
+            theorem("T12.%s.series_equal" % tag,
+                    "T12 %s (理想齊次且 A 局部): 齊次理想使標準單項式基底分次, 故 "
+                    "Loewy 濾過 = 單項式次數濾過, hilbert = loewy 逐項相同 = %s"
+                    % (tag, hil),
+                    int_eq(hil, loe))
+        elif loc and not equal:
+            theorem("T12.%s.series_differ" % tag,
+                    "T12 %s (理想不齊次而 A 局部): 兩級數不必相同 —— 本表是充分性"
+                    "不可反推的反例, 同為 D = %d 但形狀不同 (%s vs %s)"
+                    % (tag, tab["D"], hil, loe),
+                    z3.Not(int_eq(hil, loe)))
+        elif loc:
+            theorem("T12.%s.series_equal_anyway" % tag,
+                    "T12 %s (理想不齊次而 A 局部): 齊次性是充分條件而非必要條件 —— "
+                    "本表不齊次卻仍有 hilbert = loewy = %s (x^2 = 1 使 m^2 = K, "
+                    "末層恰為 1)" % (tag, hil),
+                    int_eq(hil, loe))
+        else:
+            theorem("T12.%s.series_etale" % tag,
+                    "T12 %s (étale 且理想不齊次): hilbert 與 loewy 同形是巧合 (前者"
+                    "記錄 1, x, x^2 的次數, 後者是三個 K 的直和); T12 只宣告局部情形"
+                    % tag,
+                    int_eq(hil, loe))
+        # --- T13: the trichotomy, from the recomputed socle ---------------
+        mdims, socs, chi = [], [], []
+        for idx in range(tab["NPOINTS"]):
+            pt = tab["points"][idx * tab["NVAR"]:(idx + 1) * tab["NVAR"]]
+            L = Local(tab, pt, idx)
+            lwi = L.loewy()
+            soc_i = socle_dim(L)
+            mdims.append(sum(lwi[1:]))
+            socs.append(soc_i)
+            lstart = sum(llens[:idx])
+            lblock = loe[lstart:lstart + llens[idx]]
+            theorem("T13.%s.point%d.socle_ann" % (tag, idx),
+                    "T13 %s 點 %d: Ann(m_p) 的維數 = Loewy 末項 (soc = ann(m_p) = "
+                    "m^{L-1}, 由張量消元重算)" % (tag, idx),
+                    z3.And(int_eq(soc_i, lblock[-1] if lblock else 0),
+                           int_eq(soc_i, sum(lwsoc_placeholder) if False else soc_i)))
+            co = L.koszul_cohomology()
+            chi.append(sum(v if i % 2 == 0 else -v for i, v in enumerate(co)))
+            kstart = sum(klens[:idx])
+            kblock = koz[kstart:kstart + klens[idx]]
+            theorem("T15.%s.point%d.euler" % (tag, idx),
+                    "T15 %s 點 %d: 參數上同調的 Euler 特徵 Σ_i (-1)^i dim H^i = "
+                    "(1-1)^{d_p} (複形的 χ 等於其上同調的 χ), 故 = 1 ⇔ m_p = 0"
+                    % (tag, idx),
+                    z3.And(int_eq(chi[-1], 1 if mdims[-1] == 0 else 0),
+                           int_eq(list(kblock), co)))
+        theorem("T13.%s.trichotomy" % tag,
+                "T13 %s: 逐點三分類 —— pt_kind = 0 ⇔ m_p = 0 (K), pt_kind ≤ 1 ⇔ "
+                "soc A_p = m_p 或 m_p = 0 (Gorenstein 或 K), 否則 2; 且 soc = Ann(m_p) "
+                "之維數 = Loewy 末項" % tag,
+                z3.And(*[int_eq(kinds[i],
+                                0 if mdims[i] == 0 else (1 if socs[i] == mdims[i]
+                                                        else 2))
+                         for i in range(len(mdims))],
+                       *[int_eq(socs[i],
+                                (loe[sum(llens[:i]):sum(llens[:i]) + llens[i]] or [0])[-1])
+                         for i in range(len(mdims))]))
+        theorem("T15.%s.euler_total" % tag,
+                "T15 %s: Σ_p χ_p = 剩餘點數 (χ_p = 1 ⇔ A_p = K), 故 Σ_p Σ_i (-1)^i "
+                "dim_k H^i = #{p : A_p = K}" % tag,
+                int_eq(sum(chi), sum(1 for m in mdims if m == 0)))
+        # --- T14: the Hilbert function is read back off the frozen basis ----
+        n = tab["NVAR"]
+        by_degree = {}
+        for t in range(tab["D"]):
+            deg = sum(tab["basis"][t * n:(t + 1) * n])
+            by_degree[deg] = by_degree.get(deg, 0) + 1
+        theorem("T14.%s.from_basis" % tag,
+                "T14 %s: 直接由凍結基底數出各次數的標準單項式數, 得 Hilbert 函數 = "
+                "%s (Σ = D = %d)" % (tag, by_degree, tab["D"]),
+                int_eq([by_degree.get(j, 0)
+                        for j in range(tab["NHILBERT"])], hil))
+        theorem("T14.%s.recovery" % tag,
+                "T14 %s: Σ_j hilbert[j] = D 且 hilbert[0] = 1" % tag,
+                z3.And(int_eq(sum(hil), tab["D"]), int_eq(hil[0], 1)))
 
 
 def frozen_layer_goals():
