@@ -12,9 +12,9 @@
 
 | 層 | 路徑 | 內容 | 驗證 |
 |---|---|---|---|
-| 編譯期引擎 | `algebra-ct/{poly,la,gb,quot,val,coho,cat,emit}` + `cmd/gen` | 有限域/多項式、有限域線性代數、Gröbner、零維商環、截斷冪級數、**上同調不變量**、**範疇化**、代碼生成 | **81/81** 斷言測試通過 |
-| 執行期零成本層 | `algebra/ga` | 只含凍結整數表 + 查表運算 | **9/9** 斷言測試通過 |
-| 隱蔽形式化證明（Z3） | `proof/ga_proofs.py` + `proof/cat_proofs.py` | 凍結表 **335 個 SMT 目標** + 範疇化 **40 個目標**，合計 **375 個目標全部 `unsat` 放行** | `proof/RESULTS.md`、`proof/RESULTS_CAT.md` |
+| 編譯期引擎 | `algebra-ct/{poly,la,gb,quot,val,coho,cat,emit}` + `cmd/gen` | 有限域/多項式、有限域線性代數、Gröbner、零維商環、截斷冪級數、**上同調不變量**、**範疇化**、代碼生成 | **83/83** 斷言測試通過 |
+| 執行期零成本層 | `algebra/ga` | 只含凍結整數表 + 查表運算 | **13/13** 斷言測試通過 |
+| 隱蔽形式化證明（Z3） | `proof/ga_proofs.py` + `proof/cat_proofs.py` | 凍結表 **335 個 SMT 目標** + 範疇化 **67 個目標**，合計 **402 個目標全部 `unsat` 放行** | `proof/RESULTS.md`、`proof/RESULTS_CAT.md` |
 | 隱蔽形式化證明（MoonBit） | `algebra/gap/gap.mbtp` | `predicate` / `lemma` / `proof_ensure` 邏輯側規格 | `moon check` 乾淨（`moon prove` 需 Why3） |
 
 關鍵數據：
@@ -26,7 +26,7 @@
   （fat）、`D=4, NVAR=2, EDIM=2, GROUP_ORDER=4`（wild，`A = K[C₂×C₂]`）。
 * 上同調不變量（第 2.10 節 T7–T11）：`rad A`、`soc`、`Ω¹ ⊗_A K` 的維數、`Ext¹`、
   Frobenius 固定點、`KIND` 三分類與 Cohen–Mac Lane Betti 數，全部**編譯期**算完凍結。
-* 範疇化（第 2.12 節 T16–T18）：整數被提升為**分次物件與餘可估複形**——
+* 範疇化（第 2.12 節 T16–T18、第 2.13 節 T19）：整數被提升為**分次物件與餘可估複形**——
   `Graded`、Koszul 複形（含矩陣）、Loewy 濾過 `gr^i A_p = m^i/m^{i+1}`、
   Cohen–Mac Lane 環 `Λ^*(V) ⊗ K[W]`（含乘法表、結合律、分次反交換）。
   由凍結張量實算：胖點 Loewy `1 + 2t`、Koszul 上同調 `1 + 3t + 2t²`；
@@ -438,6 +438,66 @@ Koszul 符號滿足 `s(S,T)·s(T,S) = (−1)^{|S||T|}`，即分次反交換。
 `proof/RESULTS_CAT.md` —— `m² = span{1+x+y+xy}`、`dim_k m² = 1`、
 `b_i = i+1` 與凍結 `betti` 逐項相符，皆由**凍結張量重新消元**後比對。）
 
+### 2.13 範疇化物件進入凍結表（T19）
+
+第 2.12 節的分次物件只存在於**編譯期**：`emit` 只把整數（`D`、`EDIM`、`RAD_DIM`、
+`SOCLE_DIM`、`betti`）寫進 `tables.mbt`。T19 把**物件本身**也凍結——仍是零成本
+（`pub let` 的整數陣列，沒有任何執行期計算），但執行期因此能讀到分次的讀法，
+而不只是總數。
+
+`Cat`（`cat/res.mbt` 的 `categorify`）持有五個平坦 `Int32` 陣列：Hilbert 函數 `hilbert`、
+Loewy 分次 `loewy`（各點區塊串接）、區塊長度 `loewy_lens`、參數上同調 `kozul` 與
+`kozul_lens`。`emit` 由它們產生 `NHILBERT` / `NLOEWY` / `NKOSZUL` /
+`NPOINTS_CAT` 四個 `pub const` 與五個 `pub let`，`algebra/ga` 則以
+`hilbert_total`、`hilbert_at`、`loewy_block`、`mdim_at`、`socle_at`、`kozul_block`、
+`dim_at`、`loewy_total`、`kozul_total` 九個**零成本讀取器**對外開放。
+
+**定理 2.48（T19.1，Hilbert 函數的恢復恆等式）.**
+`Σ_j hilbert[j] = D = dim_k A`，且 `hilbert[0] = 1`。
+標準單項式按總次數分割單項式基底，故級數係數的和就是 `dim_k A`；常數項是 `1`。
+
+**定理 2.49（T19.2，Loewy = 不變量的分次版本）.** 對每個點 `p`，
+
+```text
+gr^0 A_p = 1,   Σ_i gr^i A_p = dim_k A_p = 1 + dim_k m_p,
+m^L = 0  ⟹  gr^{L−1} A_p = m^{L−1} = soc A_p,
+Σ_p Σ_i gr^i A_p = D,   Σ_p Σ_{i≥1} gr^i A_p = RAD_DIM,   Σ_p gr^{L−1} A_p = SOCLE_DIM.
+```
+
+後兩式說明 T17 的兩個整數**不是獨立事實**，而是這個陣列的尾和與末項；
+`fat` 與 `wild` 的 `RAD_DIM` 分別是 `2` 與 `1+2`，`SOCLE_DIM` 是 `2` 與 `1`。
+
+**定理 2.50（T19.3，參數上同調是規則性的判別式）.** 對每個點 `p`，
+`kozul_block(p)[0] = 1`（因 `H^0 = A_p/m_p = K`），且
+
+```text
+kozul_block(p) = 1  ⟺  m_p = 0  ⟺  A_p 正則（= 是一個 K 的副本）.
+```
+
+這是**由乘法表算出**的正則性判準，不需要「參數構成正則序列」的假設
+（見定理 2.45 的警告）：若 `m_p = 0`，Koszul 複形在零次微分的錐上，
+上同調即 `K`；反之 `m_p ≠ 0` 時 `dim_k m_p ≥ 1` 使複形的 H⁰ 之外另有非零分次。
+
+**機器驗證（凍結的形狀）**
+
+| 表 | `hilbert` | `loewy`（串接） | `loewy_lens` | `kozul`（串接） | `kozul_lens` |
+|---|---|---|---|---|---|
+| `fat` | `[1, 2]` | `[1, 2]` | `[2]` | `[1, 3, 2]` | `[3]` |
+| `wild` | `[1, 2, 1]` | `[1, 2, 1]` | `[3]` | `[1, 3, 3, 1]` | `[4]` |
+| `cub` | `[1, 1, 1]` | `[1, 1, 1]` | `[1, 1, 1]` | `[1, 1, 1]` | `[1, 1, 1]` |
+
+注意 `cub`：三個 étale 因子各給一個 `[1]`，串接後與 Hilbert 函數同形但**理由不同**
+（前者是三個 `K` 的直和的 Loewy 分解，後者是 `1, x, x²` 的分次）——
+這正是「整數不足以決定物件」的最小例子，也是 T19 存在的理由。
+`fat` 與 `wild` 局部且標準單項式基底按次數分次，故其 `loewy` 區塊恰等於 `hilbert`
+（兩條獨立路徑算出的同一物件，互為印證）。
+
+**憑證**：`proof/cat_proofs.py` 的 `T19.*` 目標**直接讀凍結表裡的陣列**
+（而不是重算），因此它證的是「執行期讀到的就是引擎算出的那個分次物件」，即編譯期與
+執行期之間的一致性：15 個目標（每表 5 個）涵蓋 `Σ hilbert = D`、`hilbert[0] = 1`、
+`Σ loewy = D`、區塊長度自洽且 `NPOINTS_CAT = NPOINTS`、每個 Loewy 區塊首項為 1 且
+尾和/末項分別給出 `RAD_DIM`/`SOCLE_DIM`、`kozul` 首項為 1、以及定理 2.50 的判準。
+
 ---
 
 ## 3. 演算法、複雜度與收斂分析
@@ -528,7 +588,25 @@ front，可把剩餘部分降維到 `D` 維線性代數。
 > 必須**串接矩陣**求聯立零空間；若把矩陣**相加**再求核，得到的是 `Ann(Σg_i)`，
 > 一般情況下是錯的（胖點即為反例）。
 
-### 3.7 複雜度總表
+### 3.7 範疇化資料的凍結（`categorify`，T19）
+
+`cat::categorify(q, ps)` 把第 2.12–2.13 節的三個分次物件從同一張乘法表算出，
+再交給 `emit` 寫成凍結常數。三段流程（全部只用線性代數，無 Gröbner、無消元）：
+
+| 步驟 | 演算法 | 複雜度 | 輸入 → 輸出 |
+|---|---|---|---|
+| 1 | `hilbert`：按基底元素的總次數累計 | `O(D·nvar)` | `q.dim` 個單項式的度 → `Σ_j dim A_j` |
+| 2 | `loewy`：以 `m^i A_p` 的像的逆像做遞減濾過，逐次解 `d·D` 聯立方程 | `O(L_p · D³)`，`L_p =` Loewy 層數 ≤ `D` | `m_p` 的生成矩陣 → `gr^i A_p` |
+| 3 | `parameter_cohomology`：對參數矩陣的 Koszul 複形逐次 `d^r = 0` 消去 | `O(r · d^{r+2})`，`r = dim m_p` | `dim m_p` 個參數 → `dim H^i` |
+
+**正確性設計**：第 2 步的每一層都重新解一次線立方程系統（而非假設前一層的商是自由的），
+故在特徵 `p` 下也不需要正則序列假設；第 3 步逐次檢查 `im d^{i+1} ⊆ ker d^i`，
+不滿足即為 bug（`dd = 0` 斷言）。
+
+複雜度總結：整條編譯期管線 `O(D³ · D + r·d^{r+2})`，全部在**編譯期**完成；
+執行期讀取任一分次維數是 `O(1)`（陣列索引）或 `O(L_p)`（取出整個區塊）。
+
+### 3.8 複雜度總表
 
 | 任務 | 樸素 | 本系統 |
 |---|---|---|
@@ -539,6 +617,9 @@ front，可把剩餘部分降維到 `D` 維線性代數。
 | 冪等元 | 理想分解 | `O(V³)` 線性代數 |
 | socle | Gröbner 推導 | `O(n·D³)` 線性代數 |
 | radical | 反覆分解 | `O(D³)` 跡/零空間 |
+| Loewy 分次 | 反覆求冪基 | `O(L·D³)` 線性代數 |
+| 參數上同調 | 完整正則序列假設 | `O(r·d^{r+2})`，無假設 |
+| 讀取任一分次維數 | — | `O(1)`（凍結陣列索引） |
 
 ---
 
@@ -602,7 +683,7 @@ front，可把剩餘部分降維到 `D` 維線性代數。
 | 層 | 位置 | 狀態 |
 |---|---|---|
 | Z3（SMT-LIB2 語義，凍結表） | `proof/ga_proofs.py` → `proof/RESULTS.md` | **335 / 335 目標 `unsat`** |
-| Z3（範疇化層） | `proof/cat_proofs.py` → `proof/RESULTS_CAT.md` | **40 / 40 目標 `unsat`** |
+| Z3（範疇化層） | `proof/cat_proofs.py` → `proof/RESULTS_CAT.md` | **67 / 67 目標 `unsat`** |
 | MoonBit（`moon prove`） | `algebra/gap/gap.mbtp` | 通過 `moon check`；執行 `moon prove ga/gap` 需 Why3 ≥ 1.7.2 與 z3 |
 
 「隱蔽」的含義：**驗證邊界與執行邊界分離**。`gap` 套件不被任何執行期套件依賴，
@@ -656,8 +737,8 @@ T18* 範疇化（Cohen-Mac Lane 環）：|G| = p^n 且 r = GROUP_RANK、dim_k H^
 > Cohen-Maclane 公式），再與凍結常數比對；理想本身則直接解析 `algebra/moon.mod`
 > 的 `--terms` 規則取得，確保憑證量化的是引擎實際執行的那個理想。
 
-完整表格見 `proof/RESULTS.md`（凍結表，375 個目標含範疇化）與
-`proof/RESULTS_CAT.md`（範疇化 40 個目標）。兩者皆由 `python3 proof/run_proofs.py` 重新產生。
+完整表格見 `proof/RESULTS.md`（凍結表，402 個目標含範疇化）與
+`proof/RESULTS_CAT.md`（範疇化 67 個目標）。兩者皆由 `python3 proof/run_proofs.py` 重新產生。
 
 ### 6.4 信任邊界（誠實聲明）
 
@@ -699,7 +780,7 @@ cd /home/user/alge-repo/algebra-ct && moon build --target native cmd/gen
 # 3) 執行期（9 個斷言測試；dev_build 會自動重生成凍結表）
 cd /home/user/alge-repo/algebra && moon test --target native
 
-# 4) 隱蔽形式化證明（Z3）：凍結表 335 + 範疇化 40 = 375 目標
+# 4) 隱蔽形式化證明（Z3）：凍結表 335 + 範疇化 67 = 402 目標
 cd /home/user/alge-repo/proof && python3 run_proofs.py    # -> RESULTS.md, RESULTS_CAT.md
 
 # 5) MoonBit 側證明（需 Why3 ≥ 1.7.2 + z3）
@@ -732,11 +813,21 @@ moon run ./cmd/gen --p 2  --n 2 --terms "2.0:1|0.0:-1;0.2:1|0.0:-1"        --nam
 | `GROUP_ORDER`, `GROUP_RANK` | 0, 0 | 0, 0 | **4, 2** |
 | `KIND` | 0（étale） | 2（局部非群） | **1（`p`-群）** |
 | `NBETTI`, `betti` | 0, `[]` | 0, `[]` | 7, `[1,2,3,4,5,6,7]` |
+| `NHILBERT`, `hilbert`（T19） | 3, `[1,1,1]` | 2, `[1,2]` | 3, `[1,2,1]` |
+| `NLOEWY`, `loewy`, `loewy_lens` | 3, `[1,1,1]`, `[1,1,1]` | 2, `[1,2]`, `[2]` | 3, `[1,2,1]`, `[3]` |
+| `NKOSZUL`, `kozul`, `kozul_lens` | 3, `[1,1,1]`, `[1,1,1]` | 3, `[1,3,2]`, `[3]` | 4, `[1,3,3,1]`, `[4]` |
+| `NPOINTS_CAT` | 3 | 1 | 1 |
 
 > `COTANGENT_DIM = dim_K(Ω¹ ⊗_A K) = Σ_p edim(A_p) = dim_K Ext¹_A(K,K)`，
 > **不是** `dim_K Ω¹_{A/K}`（後者依序為 0、3、8）。見定理 2.31 的說明。
 >
 > `SOCLE_DIM` 在 `wild` 為 **1**（`soc = A·(1+x)(1+y)`），不是 `r = 2`。見定理 2.34。
+
+> T19 的五個陣列是 T16–T18 的分次物件本身（定理 2.48–2.50）：
+> `Σ hilbert = Σ loewy = D`、`kozul[0] = 1`、`Σ_{i≥1} loewy[p] = mdim(A_p)`、
+> 末項 = socle。`RAD_DIM` 與 `SOCLE_DIM` 可由此兩陣列重算，故不是獨立常數。
+> 讀取器：`hilbert_total`、`hilbert_at`、`loewy_block`、`mdim_at`、`socle_at`、
+> `kozul_block`、`dim_at`、`loewy_total`、`kozul_total`。
 
 ## 附錄 B：測試清單
 
@@ -753,17 +844,23 @@ moon run ./cmd/gen --p 2  --n 2 --terms "2.0:1|0.0:-1;0.2:1|0.0:-1"        --nam
   `trunc`、`series_deriv`（含乘積律 `(fg' = f'g + fg'`）、`series_pow`。
 * `algebra-ct/coho`（8）：T7–T11 白盒測試——reduced / étale 例、非簡約胖點、`p`-群代數
   `F₂[C₂×C₂]`、Frobenius 固定空間、Cohen–Mac Lane 係數。
-* `algebra-ct/cat`（13）：`Graded` 的分次代數律與 `trim` 語義；T16 的 Koszul 複形——
+* `algebra-ct/cat`（15）：`Graded` 的分次代數律與 `trim` 語義；T16 的 Koszul 複形——
   項維數 `d·C(m,i)`、`d d = 0`（以矩陣驗證）、`H^0 = 1`、胖點 `1+3t+2t²`、wild `(1+t)³`、
   etale 每點為 `1`、同調維數與 `homology_basis` 的代表元數一致；T17 的 Loewy
   `1+2t` / `1+2t+t²`、總維數、`Σ_{i≥1}`、`socle_graded`、etale 三點；T18 的
   `Λ(k²)⊗K[w²]` 分次 `b_i = i+1`、總大小 112、`tate_ranks = gr`、單位、結合律（窮舉三元組）、
-  分次反交換、外積的 Koszul 符號、與凍結 `betti` 前四項相符。
-* `algebra/ga`（9）：凍結張量即環；原始冪等元（和為 1、正交、冪等、求值為 δ）；胖點局部 +
+  分次反交換、外積的 Koszul 符號、與凍結 `betti` 前四項相符；
+  **T19 的 `categorify`**：`hilbert_total = D`、每個 Loewy 區塊首項為 1、
+  `dim A_p = 1 + dim m_p`、參數上同調首項為 1 且「為 `1` ⇔ `A_p` 正則」、
+  三張表的凍結區塊形狀（`wild` `[1,2,1]`/`[1,3,3,1]`、`fat` `[1,2]`/`[1,3,2]`、
+  `cub` 三個 `[1]`）與越界區塊回傳空陣列。
+* `algebra/ga`（13）：凍結張量即環；原始冪等元（和為 1、正交、冪等、求值為 δ）；胖點局部 +
   `edim = 2` + `socle` 二維 + `m² = 0`；根的求值互異；T7/T8 的 étale 與胖點上同調；
   T9/T10 的 `K[C₂×C₂]` Betti 數 `b_i = i+1` 與 `N² = 0`；
-  **反例測試**「餘切空間 ≠ `dim_k Ω¹`」；`nullspace`/`solve` 的支點列回歸。
-* `proof`（凍結表 335 目標 + 範疇化 40 目標 = 375 目標，全部 `unsat`）：
+  **反例測試**「餘切空間 ≠ `dim_k Ω¹`」；`nullspace`/`solve` 的支點列回歸；
+  **T19 的三項**：`hilbert_total = D`、Loewy 區塊重算 `RAD_DIM`/`SOCLE_DIM`/
+  `Σ dim A_p = D`、參數上同調首項與規則性判準。
+* `proof`（凍結表 335 目標 + 範疇化 67 目標 = 402 目標，全部 `unsat`）：
   見 `proof/RESULTS.md` 與 `proof/RESULTS_CAT.md`。
 ---
 
@@ -885,3 +982,53 @@ moon run ./cmd/gen --p 2  --n 2 --terms "2.0:1|0.0:-1;0.2:1|0.0:-1"        --nam
 
 憑證經**突變測試**驗證非空轉：把任一凍結常數改錯，對應 Z3 目標即回傳
 `sat`（存在反例），確認這些定理是真的在檢查東西。
+
+---
+
+## 附錄 E：範疇化凍結與健檢（2026-10-19，T19）
+
+### E.1 這次做了什麼
+
+把第 2.12 節已存在於**編譯期**的分次物件（`Graded`）**送進凍結表**：
+
+| 層 | 前 | 後 |
+|---|---|---|
+| `cat::categorify` | — | 五個平坦 `Int32` 陣列 + 區塊長度 + `nfactors` |
+| `cat::Cat` 讀取器 | — | `loewy_point`、`kozul_point`、`hilbert_total`、`mdim`、`dim_at`、`socle` |
+| `emit` | 只輸出整數 | 另輸出 `NHILBERT`/`NLOEWY`/`NKOSZUL`/`NPOINTS_CAT` 與五個 `pub let` |
+| `ga::Tables` | 18 個欄位 | 24 個欄位（多 6 個凍結陣列） |
+| `ga::Tables` 讀取器 | — | `hilbert_total`、`hilbert_at`、`loewy_block`、`mdim_at`、`socle_at`、`kozul_block`、`dim_at`、`loewy_total`、`kozul_total` |
+
+零成本仍是硬性約束：新增的五個陣列是 `pub let` 整數常數，
+**沒有任何執行期代數**——讀一個分次維數是一次陣列索引，取整個區塊是 `O(L_p)` 次複製。
+
+### E.2 健檢中修掉的問題
+
+1. **`RAD_DIM`/`SOCLE_DIM` 的重複來源（技術債 → 已消除）。**
+   在加入 T19 之前，`RAD_DIM` 與 `SOCLE_DIM` 是 `coho` 獨立算出的兩個整數，
+   而 `Loewy` 物件裡已含同樣的資訊。現在 `ga` 可由 `loewy` 陣列重算兩者
+   （測試 `T19.2` 正是這個斷言），故它們是**同一物件的兩種讀法**而非兩批事實。
+2. **`soc ≤ rad` 的錯誤直覺。** 測試初稿斷言 `socle ≤ rad`，在 `cub` 上失敗
+   （étale：`rad = 0` 而 `soc = K`，每個因子貢獻 1）。正確的界是兩者都 `≤ D`；
+   這個反例已寫進測試註解，因為「socle ⊆ rad」只對非約化部分成立。
+3. **cub 的 Loewy 與 Hilbert 同形的陷阱。** `cub` 的 `loewy = hilbert = [1,1,1]`，
+   初稿的憑證把它當成「兩者不必相同」的反例而失敗。事實是兩者**數值相同、理由不同**
+   （前者是三個 `K` 的直和，後者是 `1, x, x²` 的分次）。憑證改為陳述真實內容
+   （定理 2.13 節表格下方的註記），並在 MoonBit 測試與 Z3 各留一個對照。
+4. **`int_eq` 只吃純量。** 憑證裡要比較整個凍結區塊時拋 `TypeError`；
+   `int_eq` 現已支援列表逐項比較（長度不同直接為 `false`）。
+5. **跨檔案型別別名（本專案的 MoonBit 慣例）。** `emit/emit.mbt` 頂端的
+   `type Fp = @poly.Fp` 一組別名是硬性要求：直接寫 `CatData`（即使它在 `cat`
+   套件內以 `pub(all) struct` 宣告）會得到 `The type CatData is undefined`，
+   而 `@cat.Cat` 可用。T19 的 `type Cat = @cat.Cat` 即依此慣例加入。
+
+### E.3 本次成果
+
+| 項目 | 前 | 後 |
+|---|---|---|
+| `algebra-ct` 斷言測試 | 81 | **83** |
+| `algebra/ga` 斷言測試 | 9 | **13** |
+| Z3 憑證（範疇化） | 40 | **67**（新增 15 個 T19 目標） |
+| Z3 憑證（總計） | 375 | **402** |
+| 凍結不變量 | 11 個整數 | **11 個整數 + 5 個分次陣列 + 4 個長度常數** |
+| 執行期讀取器 | 18 | **27** |

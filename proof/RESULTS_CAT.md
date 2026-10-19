@@ -42,5 +42,32 @@
 | 38 | T18 wild: H^0 = K, 即第 0 次分次維數為 1 (乘法單位存在且唯一) `T18.wild.ring_unit` | 1 | 1 | PASS |
 | 39 | T18: 外積符號為 Koszul 符號 (e_1 e_0 = -e_0 e_1), 故分次反交換 `T18.wild.grcomm_sign` | 1 | 1 | PASS |
 | 40 | T18: 對 [3] 中所有不相交子集對, 符號皆為 ±1 且 s(S,T)s(T,S) = (-1)^{|S||T|} (分次反交換) `T18.wild.grcomm_all` | 1 | 1 | PASS |
+| 41 | T19 fat: Σ_j hilbert[j] = D (Hilbert 函數的恢復恆等式) `T19.fat.hilbert_total` | 1 | 1 | PASS |
+| 42 | T19 fat: hilbert[0] = 1 (1 恆為標準單項式) `T19.fat.hilbert_unit` | 1 | 1 | PASS |
+| 43 | T19 fat: Σ loewy = D (Loewy 濾過窮盡 A) `T19.fat.loewy_total` | 1 | 1 | PASS |
+| 44 | T19 fat: Σ loewy_lens = NLOEWY = len(loewy), 且 len(loewy_lens) = NPOINTS_CAT = NPOINTS `T19.fat.loewy_lengths` | 1 | 1 | PASS |
+| 45 | T19 fat: 每個 Loewy 區塊的首項為 1 (gr^0 = K), Σ_{i>=1} = RAD_DIM, 最後一項之和 = SOCLE_DIM `T19.fat.loewy_blocks` | 1 | 1 | PASS |
+| 46 | T19 fat: Σ kozul_lens = NKOSZUL = len(kozul), 且 len(kozul_lens) = NPOINTS_CAT `T19.fat.kozul_lengths` | 1 | 1 | PASS |
+| 47 | T19 fat: 每個參數上同調區塊的首項為 1 (H^0 = A_p/m_p = K) `T19.fat.kozul_h0` | 1 | 1 | PASS |
+| 48 | T19 fat: 參數上同調區塊為 1 ⇔ m_p = 0 ⇔ A_p 正則 (以 Loewy 區塊判定) `T19.fat.kozul_regular` | 1 | 1 | PASS |
+| 49 | T19 fat: 局部且標準單項式基底次數分次時, Loewy 區塊 = Hilbert 函數 (兩者都由凍結張量算出, 互相印證) `T19.fat.loewy_equals_hilbert_local` | 1 | 1 | PASS |
+| 50 | T19 wild: Σ_j hilbert[j] = D (Hilbert 函數的恢復恆等式) `T19.wild.hilbert_total` | 1 | 1 | PASS |
+| 51 | T19 wild: hilbert[0] = 1 (1 恆為標準單項式) `T19.wild.hilbert_unit` | 1 | 1 | PASS |
+| 52 | T19 wild: Σ loewy = D (Loewy 濾過窮盡 A) `T19.wild.loewy_total` | 1 | 1 | PASS |
+| 53 | T19 wild: Σ loewy_lens = NLOEWY = len(loewy), 且 len(loewy_lens) = NPOINTS_CAT = NPOINTS `T19.wild.loewy_lengths` | 1 | 1 | PASS |
+| 54 | T19 wild: 每個 Loewy 區塊的首項為 1 (gr^0 = K), Σ_{i>=1} = RAD_DIM, 最後一項之和 = SOCLE_DIM `T19.wild.loewy_blocks` | 1 | 1 | PASS |
+| 55 | T19 wild: Σ kozul_lens = NKOSZUL = len(kozul), 且 len(kozul_lens) = NPOINTS_CAT `T19.wild.kozul_lengths` | 1 | 1 | PASS |
+| 56 | T19 wild: 每個參數上同調區塊的首項為 1 (H^0 = A_p/m_p = K) `T19.wild.kozul_h0` | 1 | 1 | PASS |
+| 57 | T19 wild: 參數上同調區塊為 1 ⇔ m_p = 0 ⇔ A_p 正則 (以 Loewy 區塊判定) `T19.wild.kozul_regular` | 1 | 1 | PASS |
+| 58 | T19 wild: 局部且標準單項式基底次數分次時, Loewy 區塊 = Hilbert 函數 (兩者都由凍結張量算出, 互相印證) `T19.wild.loewy_equals_hilbert_local` | 1 | 1 | PASS |
+| 59 | T19 cub: Σ_j hilbert[j] = D (Hilbert 函數的恢復恆等式) `T19.cub.hilbert_total` | 1 | 1 | PASS |
+| 60 | T19 cub: hilbert[0] = 1 (1 恆為標準單項式) `T19.cub.hilbert_unit` | 1 | 1 | PASS |
+| 61 | T19 cub: Σ loewy = D (Loewy 濾過窮盡 A) `T19.cub.loewy_total` | 1 | 1 | PASS |
+| 62 | T19 cub: Σ loewy_lens = NLOEWY = len(loewy), 且 len(loewy_lens) = NPOINTS_CAT = NPOINTS `T19.cub.loewy_lengths` | 1 | 1 | PASS |
+| 63 | T19 cub: 每個 Loewy 區塊的首項為 1 (gr^0 = K), Σ_{i>=1} = RAD_DIM, 最後一項之和 = SOCLE_DIM `T19.cub.loewy_blocks` | 1 | 1 | PASS |
+| 64 | T19 cub: Σ kozul_lens = NKOSZUL = len(kozul), 且 len(kozul_lens) = NPOINTS_CAT `T19.cub.kozul_lengths` | 1 | 1 | PASS |
+| 65 | T19 cub: 每個參數上同調區塊的首項為 1 (H^0 = A_p/m_p = K) `T19.cub.kozul_h0` | 1 | 1 | PASS |
+| 66 | T19 cub: 參數上同調區塊為 1 ⇔ m_p = 0 ⇔ A_p 正則 (以 Loewy 區塊判定) `T19.cub.kozul_regular` | 1 | 1 | PASS |
+| 67 | T19 cub: étale 時 Loewy 區塊逐點皆為 [1] (每個因子是 K), 而 Hilbert 函數記錄標準單項式 1, x, x^2 的次數; 兩者在本表同為 [1, 1, 1] 但理由不同 `T19.cub.loewy_equals_hilbert_etale` | 1 | 1 | PASS |
 
-**合計 goals = 40，已由 Z3 證明 = 40，失敗 = 0**
+**合計 goals = 67，已由 Z3 證明 = 67，失敗 = 0**

@@ -482,3 +482,138 @@ fn subspace_quotient_dim(
 ) -> Int32 {
   @la.rank(k, u) - @la.rank(k, v)
 }
+
+///|
+/// The categorified data of `A`: three graded objects, kept as flat arrays so
+/// that they can be frozen into the runtime table without any algebra.
+///
+/// * `hilbert[j]` -- the number of standard monomials of total degree `j`, so
+///   `sum hilbert = dim_k A` and `hilbert` is the Hilbert function of `A`.
+/// * `loewy` -- the Loewy layers `gr^i A_p = m_p^i/m_p^{i+1}`, **concatenated
+///   over the points**; `loewy_lens[p]` is the Loewy length of the `p`-th
+///   factor, so the blocks are recoverable.  `sum loewy = dim_k A`.
+/// * `kozul` -- the parameter cohomology `H^i` of the Koszul complex on the
+///   parameters of each factor, concatenated the same way, with `kozul_lens[p]`
+///   recording each block.  Its first entry is always `1` (`H^0 = K`).
+///
+/// **Why concatenation and not a single object.**  `A` is a *product* of local
+/// factors, and `Tor`, `Ext` and cohomology commute with finite products, so
+/// the graded objects of `A` are the direct sums of the graded objects of the
+/// factors.  The frozen table stores the blocks rather than the sum so that
+/// the pointwise data survives the round trip: `RAD_DIM` is `sum_p mdim(A_p)`
+/// and `SOCLE_DIM` is `sum_p` the last block of `loewy`, and both are visible
+/// per point at runtime.
+pub(all) struct Cat {
+  hilbert : Array[Int32]
+  loewy : Array[Int32]
+  kozul : Array[Int32]
+  loewy_lens : Array[Int32]
+  kozul_lens : Array[Int32]
+  nfactors : Int32
+}
+
+///|
+/// The categorified data of `A`, computed from the same multiplication table
+/// the integers of `coho` come from.
+pub fn categorify(q : Quot, ps : Array[Array[Int32]]) -> Cat {
+  let h = hilbert(q)
+  let locs = local_factors(q, ps)
+  let flat_loe = []
+  let flat_koz = []
+  let loewy_lens = []
+  let kozul_lens = []
+  let nfac = Array::make(1, 0)
+  for loc in locs {
+    nfac[0] += 1
+    let lw = loewy(loc)
+    loewy_lens.push(lw.dims.length())
+    for d in lw.dims {
+      flat_loe.push(d)
+    }
+    let kz = parameter_cohomology(loc)
+    kozul_lens.push(kz.dims.length())
+    for d in kz.dims {
+      flat_koz.push(d)
+    }
+  }
+  Cat::{
+    hilbert: h.dims.copy(),
+    loewy: flat_loe,
+    kozul: flat_koz,
+    loewy_lens,
+    kozul_lens,
+    nfactors: nfac[0],
+  }
+}
+
+///|
+/// The `p`-th block of `loewy`, i.e. `gr^i A_p` for `p` a `K`-rational point.
+pub fn Cat::loewy_point(self : Cat, p : Int32) -> Array[Int32] {
+  block(self.loewy, self.loewy_lens, p)
+}
+
+///|
+/// The `p`-th block of `kozul`, i.e. the parameter cohomology of `A_p`.
+pub fn Cat::kozul_point(self : Cat, p : Int32) -> Array[Int32] {
+  block(self.kozul, self.kozul_lens, p)
+}
+
+///|
+/// The `p`-th block of a concatenation whose block lengths are known.  Returns
+/// the empty array when `p` is out of range, so a caller that only has the
+/// frozen tables can still index safely.
+fn block(flat : Array[Int32], lens : Array[Int32], p : Int32) -> Array[Int32] {
+  if p < 0 || p >= lens.length() {
+    return []
+  }
+  let start = Array::make(1, 0)
+  for q in 0..<p {
+    start[0] += lens[q]
+  }
+  let out = []
+  for i in start[0]..<(start[0] + lens[p]) {
+    out.push(flat[i])
+  }
+  out
+}
+
+///|
+/// `sum_j hilbert[j]`, which is `dim_k A`.
+pub fn Cat::hilbert_total(self : Cat) -> Int32 {
+  sum_of(self.hilbert)
+}
+
+///|
+/// `dim_k A_p` read off the Loewy block: the Loewy filtration of an Artinian
+/// local ring is exhaustive, so its layers sum to `dim_k A_p`.
+pub fn Cat::dim_at(self : Cat, p : Int32) -> Int32 {
+  sum_of(self.loewy_point(p))
+}
+
+///|
+/// `dim_k m_p` read off the Loewy block: `sum_{i>=1} gr^i A_p`.
+pub fn Cat::mdim(self : Cat, p : Int32) -> Int32 {
+  self.dim_at(p) - self.loewy_point(p)[0]
+}
+
+///|
+/// `dim_k soc A_p`: the last nonzero graded piece of the Loewy block.  The
+/// last *block* is the socle even when it is empty-valued (`A_p = K` gives
+/// `gr^0 = 1` and `soc = K`), because `m^0 = A_p` and `m^0 · m_p = 0`.
+pub fn Cat::socle(self : Cat, p : Int32) -> Int32 {
+  let b = self.loewy_point(p)
+  if b.length() == 0 {
+    return 0
+  }
+  b[b.length() - 1]
+}
+
+///|
+/// `sum` of a flat integer array, `0` for the empty array.
+fn sum_of(a : Array[Int32]) -> Int32 {
+  let mut acc = 0
+  for x in a {
+    acc += x
+  }
+  acc
+}

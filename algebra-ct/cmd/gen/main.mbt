@@ -77,8 +77,11 @@ fn main raise {
     }
   }
   let inv = @coho.analyse(k, n, gens, @poly.Lex, q, ps)
+  // The categorified layer (T19): the graded objects behind those integers,
+  // frozen into the same runtime table so the pointwise reading survives.
+  let cat = @cat.categorify(q, ps)
   let stats = b.stats
-  println(@emit.emit_runtime(k, q, stats, ps, inv, name))
+  println(@emit.emit_runtime(k, q, stats, ps, inv, cat, name))
 }
 
 ///|

@@ -32,6 +32,32 @@ pub const KIND : Int = 1
 pub const NBETTI : Int = 7
 pub let betti : Array[Int] = [1, 2, 3, 4, 5, 6, 7]
 
+
+/// Hilbert function of A: `hilbert[j]` = the number of standard monomials
+/// of total degree `j`, so `NHILBERT` is its length and
+/// `sum hilbert = D` is the recovery identity.
+pub const NHILBERT : Int = 3
+pub let hilbert : Array[Int] = [1, 2, 1]
+
+/// Loewy layers `gr^i A_p = m^i/m^{i+1}`, concatenated over the points;
+/// `loewy_lens[p]` is the Loewy length of the `p`-th local factor, so
+/// `loewy_block(p)` is that factor's graded object.  `sum loewy = D`,
+/// `sum_{i>=1}` of a block is `dim_k m_p`, and its last entry is `soc A_p`:
+/// RAD_DIM and SOCLE_DIM are graded dimensions here, not separate facts.
+pub const NLOEWY : Int = 3
+pub let loewy : Array[Int] = [1, 2, 1]
+
+pub let loewy_lens : Array[Int] = [3]
+
+/// Parameter cohomology `H^i` of the Koszul complex on the parameters of
+/// each local factor, concatenated over the points.  `kozul[0] = 1` always,
+/// because `H^0 = A_p/m_p = K`.
+pub const NKOSZUL : Int = 4
+pub let kozul : Array[Int] = [1, 3, 3, 1]
+
+pub let kozul_lens : Array[Int] = [4]
+pub const NPOINTS_CAT : Int = 1
+
 /// `c * d'` for two coordinate vectors: one table read per nonzero term.
 pub fn mul(c : Array[Int], e : Array[Int]) -> Array[Int] {
   let res = Array::make(D, 0)

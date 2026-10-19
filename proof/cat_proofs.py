@@ -469,6 +469,87 @@ def run():
                      for S, T in combinations([{0}, {1}, {2}, {0, 1}, {0, 2}, {1, 2}], 2)
                      if not (S & T)]))
 
+    # ---- T19: the categorified arrays as they ship in the frozen tables -----
+    frozen_layer_goals()
+
+
+def frozen_layer_goals():
+    """T19: the categorified arrays now *ship* inside the frozen tables, so the
+    certificates read them back out of `tables.mbt` instead of recomputing
+    them -- the runtime is proved to be looking at the same graded objects the
+    engine produced."""
+    zint = G.zint
+    int_eq = G.int_eq
+    for tag in ("fat", "wild", "cub"):
+        tab = TABLES[tag]
+        hil, loe, lens, koz, klens = (tab["hilbert"], tab["loewy"],
+                                      tab["loewy_lens"], tab["kozul"],
+                                      tab["kozul_lens"])
+        theorem("T19.%s.hilbert_total" % tag,
+                "T19 %s: Σ_j hilbert[j] = D (Hilbert 函數的恢復恆等式)" % tag,
+                int_eq(sum(hil), tab["D"]))
+        theorem("T19.%s.hilbert_unit" % tag,
+                "T19 %s: hilbert[0] = 1 (1 恆為標準單項式)" % tag,
+                int_eq(hil[0], 1))
+        theorem("T19.%s.loewy_total" % tag,
+                "T19 %s: Σ loewy = D (Loewy 濾過窮盡 A)" % tag,
+                int_eq(sum(loe), tab["D"]))
+        theorem("T19.%s.loewy_lengths" % tag,
+                "T19 %s: Σ loewy_lens = NLOEWY = len(loewy), 且 len(loewy_lens) = "
+                "NPOINTS_CAT = NPOINTS" % tag,
+                z3.And(int_eq(sum(lens), tab["NLOEWY"]),
+                       int_eq(len(lens), tab["NPOINTS_CAT"]),
+                       int_eq(tab["NPOINTS_CAT"], tab["NPOINTS"])))
+        # per-point facts
+        start = 0
+        rad, soc = 0, 0
+        all_first_one = True
+        for p in range(len(lens)):
+            block = loe[start:start + lens[p]]
+            all_first_one = all_first_one and block[0] == 1
+            rad += sum(block[1:])
+            soc += block[-1]
+            start += lens[p]
+        theorem("T19.%s.loewy_blocks" % tag,
+                "T19 %s: 每個 Loewy 區塊的首項為 1 (gr^0 = K), Σ_{i>=1} = RAD_DIM, "
+                "最後一項之和 = SOCLE_DIM" % tag,
+                z3.And(z3.BoolVal(all_first_one), int_eq(rad, tab["RAD_DIM"]),
+                       int_eq(soc, tab["SOCLE_DIM"])))
+        theorem("T19.%s.kozul_lengths" % tag,
+                "T19 %s: Σ kozul_lens = NKOSZUL = len(kozul), 且 len(kozul_lens) = "
+                "NPOINTS_CAT" % tag,
+                z3.And(int_eq(sum(klens), tab["NKOSZUL"]),
+                       int_eq(len(klens), tab["NPOINTS_CAT"])))
+        kstart, first_one, regular_ok = 0, True, True
+        for p in range(len(klens)):
+            block = koz[kstart:kstart + klens[p]]
+            first_one = first_one and block[0] == 1
+            # mdim(A_p) = sum of the Loewy block minus its first entry
+            lstart = sum(lens[:p])
+            lblock = loe[lstart:lstart + lens[p]]
+            reg = (len(block) == 1) == (sum(lblock[1:]) == 0)
+            regular_ok = regular_ok and reg
+            kstart += klens[p]
+        theorem("T19.%s.kozul_h0" % tag,
+                "T19 %s: 每個參數上同調區塊的首項為 1 (H^0 = A_p/m_p = K)" % tag,
+                z3.BoolVal(first_one))
+        theorem("T19.%s.kozul_regular" % tag,
+                "T19 %s: 參數上同調區塊為 1 ⇔ m_p = 0 ⇔ A_p 正則 (以 Loewy 區塊判定)"
+                % tag,
+                z3.BoolVal(regular_ok))
+        if tab["LOCAL"]:
+            theorem("T19.%s.loewy_equals_hilbert_local" % tag,
+                    "T19 %s: 局部且標準單項式基底次數分次時, Loewy 區塊 = Hilbert "
+                    "函數 (兩者都由凍結張量算出, 互相印證)" % tag,
+                    z3.BoolVal(list(loe) == list(hil)))
+        else:
+            theorem("T19.%s.loewy_equals_hilbert_etale" % tag,
+                    "T19 %s: étale 時 Loewy 區塊逐點皆為 [1] (每個因子是 K), 而 "
+                    "Hilbert 函數記錄標準單項式 1, x, x^2 的次數; 兩者在本表同為 "
+                    "[1, 1, 1] 但理由不同" % tag,
+                    z3.And(int_eq(loe, [1, 1, 1]),
+                           int_eq(hil, [1, 1, 1])))
+
 
 def theorem(*a, **k):
     return G.theorem(*a, **k)

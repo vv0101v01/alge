@@ -11,6 +11,9 @@ type GbStats = @gb.GbStats
 type Inv = @coho.Inv
 
 ///|
+type Cat = @cat.Cat
+
+///|
 /// # Emitting the frozen runtime tables
 ///
 /// The generated package contains **no algebra**: it contains the numbers the
@@ -98,6 +101,51 @@ fn invariants(inv : Inv) -> String {
 }
 
 ///|
+/// The categorified layer (T19): the graded objects that `coho` compressed into
+/// integers, frozen as flat integer arrays so the runtime needs no algebra to
+/// read them.  `hilbert` is the Hilbert function of `A`; `loewy` and `kozul`
+/// are the Loewy layers and the parameter cohomology of each local factor,
+/// concatenated with their block lengths, so a pointwise reading survives the
+/// round trip.
+fn categorised(cat : Cat) -> String {
+  let s = StringBuilder()
+  s.write_string(
+    "\n/// Hilbert function of A: `hilbert[j]` = the number of standard monomials\n/// of total degree `j`, so `NHILBERT` is its length and\n/// `sum hilbert = D` is the recovery identity.\n",
+  )
+  s.write_string("pub const NHILBERT : Int = ")
+  s.write_string(cat.hilbert.length().to_string())
+  s.write_string("\npub let hilbert : Array[Int] = [")
+  s.write_string(list_of(cat.hilbert))
+  s.write_string("]\n")
+  s.write_string(
+    "\n/// Loewy layers `gr^i A_p = m^i/m^{i+1}`, concatenated over the points;\n/// `loewy_lens[p]` is the Loewy length of the `p`-th local factor, so\n/// `loewy_block(p)` is that factor's graded object.  `sum loewy = D`,\n/// `sum_{i>=1}` of a block is `dim_k m_p`, and its last entry is `soc A_p`:\n/// RAD_DIM and SOCLE_DIM are graded dimensions here, not separate facts.\n",
+  )
+  s.write_string("pub const NLOEWY : Int = ")
+  s.write_string(cat.loewy.length().to_string())
+  s.write_string("\npub let loewy : Array[Int] = [")
+  s.write_string(list_of(cat.loewy))
+  s.write_string("]\n")
+  s.write_string("\npub let loewy_lens : Array[Int] = [")
+  s.write_string(list_of(cat.loewy_lens))
+  s.write_string("]\n")
+  s.write_string(
+    "\n/// Parameter cohomology `H^i` of the Koszul complex on the parameters of\n/// each local factor, concatenated over the points.  `kozul[0] = 1` always,\n/// because `H^0 = A_p/m_p = K`.\n",
+  )
+  s.write_string("pub const NKOSZUL : Int = ")
+  s.write_string(cat.kozul.length().to_string())
+  s.write_string("\npub let kozul : Array[Int] = [")
+  s.write_string(list_of(cat.kozul))
+  s.write_string("]\n")
+  s.write_string("\npub let kozul_lens : Array[Int] = [")
+  s.write_string(list_of(cat.kozul_lens))
+  s.write_string("]\n")
+  s.write_string("pub const NPOINTS_CAT : Int = ")
+  s.write_string(cat.nfactors.to_string())
+  s.write_string("\n\n")
+  s.to_string()
+}
+
+///|
 /// Render a flat `Array[Int]` as a MoonBit list literal.
 fn list_of(a : Array[Int32]) -> String {
   let s = StringBuilder()
@@ -120,6 +168,7 @@ pub fn emit_runtime(
   stats : GbStats,
   ps : Array[Array[Int32]],
   inv : Inv,
+  cat : Cat,
   spec_name : String,
 ) -> String {
   let d = q.dim
@@ -201,6 +250,7 @@ pub fn emit_runtime(
   s.write_string("]\n\n")
   // ---- cohomological invariants -------------------------------------------
   s.write_string(invariants(inv))
+  s.write_string(categorised(cat))
   // ---- runtime operations -------------------------------------------------
   s.write_string(runtime_ops)
   s.write_string("\n")

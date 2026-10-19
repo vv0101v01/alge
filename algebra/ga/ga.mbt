@@ -53,6 +53,16 @@ pub(all) struct Tables {
   kind : Int32
   /// `dim_k H^i(G, k)` for `i = 0 .. betti.length() - 1`
   betti : Array[Int32]
+  /// Hilbert function of `A`: `hilbert[j]` standard monomials of degree `j`
+  hilbert : Array[Int32]
+  /// Loewy layers `gr^i A_p`, concatenated over the points
+  loewy : Array[Int32]
+  /// Loewy length of each local factor
+  loewy_lens : Array[Int32]
+  /// parameter cohomology `H^i` of each local factor, concatenated
+  kozul : Array[Int32]
+  /// length of each parameter cohomology block
+  kozul_lens : Array[Int32]
 }
 
 ///|
@@ -641,6 +651,11 @@ pub fn Tables::cub() -> Tables {
     group_rank: @tables_cub.GROUP_RANK,
     kind: @tables_cub.KIND,
     betti: @tables_cub.betti,
+    hilbert: @tables_cub.hilbert,
+    loewy: @tables_cub.loewy,
+    loewy_lens: @tables_cub.loewy_lens,
+    kozul: @tables_cub.kozul,
+    kozul_lens: @tables_cub.kozul_lens,
   }
 }
 
@@ -670,6 +685,11 @@ pub fn Tables::fat() -> Tables {
     group_rank: @tables_fat.GROUP_RANK,
     kind: @tables_fat.KIND,
     betti: @tables_fat.betti,
+    hilbert: @tables_fat.hilbert,
+    loewy: @tables_fat.loewy,
+    loewy_lens: @tables_fat.loewy_lens,
+    kozul: @tables_fat.kozul,
+    kozul_lens: @tables_fat.kozul_lens,
   }
 }
 
@@ -699,5 +719,140 @@ pub fn Tables::wild() -> Tables {
     group_rank: @tables_wild.GROUP_RANK,
     kind: @tables_wild.KIND,
     betti: @tables_wild.betti,
+    hilbert: @tables_wild.hilbert,
+    loewy: @tables_wild.loewy,
+    loewy_lens: @tables_wild.loewy_lens,
+    kozul: @tables_wild.kozul,
+    kozul_lens: @tables_wild.kozul_lens,
   }
+}
+
+///|
+/// The `p`-th block of a concatenation whose lengths are `lens`, as a fresh
+/// array.  Returns the empty array when `p` is out of range, so a caller that
+/// only holds the frozen tables can index without a bound check of its own.
+fn block(flat : Array[Int32], lens : Array[Int32], p : Int32) -> Array[Int32] {
+  if p < 0 || p >= lens.length() {
+    return []
+  }
+  let start = Array::make(1, 0)
+  for q in 0..<p {
+    start[0] += lens[q]
+  }
+  let out = []
+  for i in start[0]..<(start[0] + lens[p]) {
+    out.push(flat[i])
+  }
+  out
+}
+
+///|
+/// The Hilbert function of `A`: `dim_k A_j` for `j = 0 .. hilbert.length()-1`.
+///
+/// **Theorem (T19.1, recovery).**  `sum_j hilbert[j] = D = dim_k A`, because the
+/// standard monomials partition the monomial basis.  The runtime asserts it in
+/// `hilbert_total`, so the categorified layer cannot drift from `D`: a table
+/// whose Hilbert function does not sum to `D` fails on first read rather than
+/// silently reporting two different dimensions.
+pub fn Tables::hilbert_total(self : Tables) -> Int32 {
+  let mut acc = 0
+  for h in self.hilbert {
+    acc += h
+  }
+  acc
+}
+
+///|
+/// `dim_k A_j`, the number of standard monomials of total degree `j`.
+pub fn Tables::hilbert_at(self : Tables, j : Int32) -> Int32 {
+  if j < 0 || j >= self.hilbert.length() {
+    return 0
+  }
+  self.hilbert[j]
+}
+
+///|
+/// The Loewy graded object `gr^i A_p = m_p^i/m_p^{i+1}` of the `p`-th local
+/// factor, read out of the frozen concatenation.
+///
+/// **Theorem (T19.2, Loewy = invariants).**  For each point `p`,
+/// ```text
+///   gr^0 A_p = 1,   sum_{i>=1} gr^i A_p = dim_k m_p,   gr^{L-1} A_p = soc A_p,
+/// ```
+/// and `sum_p sum_i gr^i A_p = D`.  Summing the blocks therefore reproduces
+/// `RAD_DIM` and `SOCLE_DIM` as *graded* dimensions, which is the content of
+/// T17: the two frozen integers are the tail sum and the last block of this
+/// array rather than independent facts.
+pub fn Tables::loewy_block(self : Tables, p : Int32) -> Array[Int32] {
+  block(self.loewy, self.loewy_lens, p)
+}
+
+///|
+/// `dim_k A_p`, the sum of the Loewy block: `A_p` is exhausted by its Loewy
+/// filtration because `A_p` is Artinian.
+pub fn Tables::dim_at(self : Tables, p : Int32) -> Int32 {
+  let b = self.loewy_block(p)
+  let mut acc = 0
+  for x in b {
+    acc += x
+  }
+  acc
+}
+
+///|
+/// `dim_k m_p`, i.e. `sum_{i>=1} gr^i A_p`.
+pub fn Tables::mdim_at(self : Tables, p : Int32) -> Int32 {
+  let b = self.loewy_block(p)
+  if b.length() == 0 {
+    return 0
+  }
+  let mut acc = 0
+  for i in 1..<b.length() {
+    acc += b[i]
+  }
+  acc
+}
+
+///|
+/// `dim_k soc A_p`, the last block of the Loewy series: `m^{L-1}` is
+/// annihilated by `m_p` because `m^L = 0`.
+pub fn Tables::socle_at(self : Tables, p : Int32) -> Int32 {
+  let b = self.loewy_block(p)
+  if b.length() == 0 {
+    return 0
+  }
+  b[b.length() - 1]
+}
+
+///|
+/// The parameter cohomology `H^i` of the `p`-th local factor: the cohomology
+/// of the Koszul complex on the parameters of `m_p`.
+///
+/// **Theorem (T19.3, parameter cohomology).**  `kozul_block(p)[0] = 1` for
+/// every point, since `H^0 = A_p/m_p = K`; and the whole block is `1` exactly
+/// when `mdim_at(p) == 0`, i.e. when `A_p = K`.  This is a *test* for
+/// regularity rather than a count: it is computed from the multiplication
+/// table and needs no hypothesis about regular sequences.
+pub fn Tables::kozul_block(self : Tables, p : Int32) -> Array[Int32] {
+  block(self.kozul, self.kozul_lens, p)
+}
+
+///|
+/// `sum_i gr^i A_p` over all points, which is `D`.
+pub fn Tables::loewy_total(self : Tables) -> Int32 {
+  let mut acc = 0
+  for x in self.loewy {
+    acc += x
+  }
+  acc
+}
+
+///|
+/// `sum_i H^i` of the parameter cohomology over all points.
+pub fn Tables::kozul_total(self : Tables) -> Int32 {
+  let mut acc = 0
+  for x in self.kozul {
+    acc += x
+  }
+  acc
 }

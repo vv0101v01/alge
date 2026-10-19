@@ -221,3 +221,83 @@ test "T7 counterexample: the cotangent space is not dim_k Omega^1" {
   assert_true(t.is_zero(t.mul(x, x))) // Omega^1 from collapsing to 0
   assert_true(t.is_zero(t.mul(y, y)))
 }
+
+///|
+test "T19.1: the frozen Hilbert function sums to D" {
+  for t in [Tables::cub(), Tables::fat(), Tables::wild()] {
+    assert_eq(t.hilbert_total(), t.d) // recovery identity
+    assert_eq(t.hilbert_at(0), 1) // 1 is always a standard monomial
+  }
+  assert_eq(Tables::fat().hilbert_at(1), 2) // x, y
+  assert_eq(Tables::wild().hilbert_at(2), 1) // xy
+  assert_eq(Tables::cub().hilbert_at(2), 1) // x^2
+  assert_eq(Tables::wild().hilbert_at(9), 0) // out of range is 0
+}
+
+///|
+test "T19.2: Loewy blocks reproduce RAD_DIM and SOCLE_DIM" {
+  for t in [Tables::cub(), Tables::fat(), Tables::wild()] {
+    assert_eq(t.loewy_total(), t.d)
+    let mut rad = 0
+    let mut soc = 0
+    let mut dim = 0
+    for p in 0..<t.npoints {
+      let b = t.loewy_block(p)
+      assert_eq(b[0], 1) // gr^0 = K
+      // the Loewy filtration is exhaustive: dim_k A_p = 1 + dim_k m_p
+      assert_eq(t.dim_at(p), t.mdim_at(p) + 1)
+      dim += t.dim_at(p)
+      rad += t.mdim_at(p)
+      soc += t.socle_at(p)
+    }
+    assert_eq(rad, t.rad_dim)
+    assert_eq(soc, t.socle_dim)
+    assert_eq(dim, t.d) // the blocks partition the algebra
+  }
+  // the wild algebra: m = 3, m^2 = 1, m^3 = 0, soc = A(1+x)(1+y)
+  let w = Tables::wild()
+  assert_eq(w.loewy_block(0), [1, 2, 1])
+  assert_eq(w.mdim_at(0), 3)
+  assert_eq(w.socle_at(0), 1)
+  assert_eq(w.loewy_lens[0], 3)
+  assert_eq(w.loewy_block(1), []) // out of range
+  // the etale table: three reduced points, each of dimension 1
+  let c = Tables::cub()
+  assert_eq(c.loewy_block(0), [1])
+  assert_eq(c.loewy_block(2), [1])
+  assert_eq(c.mdim_at(0), 0)
+  assert_eq(c.socle_at(0), 1) // soc(K) = K
+}
+
+///|
+test "T19.3: the parameter cohomology detects regularity" {
+  for t in [Tables::cub(), Tables::fat(), Tables::wild()] {
+    for p in 0..<t.npoints {
+      let h = t.kozul_block(p)
+      assert_eq(h[0], 1) // H^0 = A_p/m_p = K, always
+      let regular = t.mdim_at(p) == 0
+      assert_eq(h.length() == 1, regular) // the object is 1 iff A_p is regular
+    }
+  }
+  assert_eq(Tables::fat().kozul_block(0), [1, 3, 2])
+  assert_eq(Tables::wild().kozul_block(0), [1, 3, 3, 1])
+  assert_eq(Tables::cub().kozul_total(), 3)
+  assert_eq(Tables::wild().kozul_total(), 8)
+}
+
+///|
+test "T19: the categorified layers of the three tables are pairwise distinct" {
+  // the whole point of categorification: three algebras with different
+  // dimensions-in-one-number can share `D` and still have different graded
+  // objects.  `fat` and `wild` both have `D = 3, 4`... compare the shapes that
+  // the bare integers cannot see.
+  let fat = Tables::fat()
+  let wild = Tables::wild()
+  assert_eq(fat.d, 3)
+  assert_eq(wild.d, 4)
+  // `edim` is 2 for both, and `rad_dim` differs; the Hilbert functions differ
+  // in length, and the Koszul blocks differ in more than their total.
+  assert_eq(fat.hilbert.length(), 2)
+  assert_eq(wild.hilbert.length(), 3)
+  assert_true(fat.kozul_total() != wild.kozul_total())
+}

@@ -266,3 +266,59 @@ test "T18: the Tate ranks of the wild table start 1, 2, 3, 4" {
     assert_eq(got.degree(i), frozen[i])
   }
 }
+
+///|
+/// T19: the categorified data that `emit` freezes into the runtime table.
+test "T19: categorify returns the three graded objects with sum D" {
+  for ring in [fat_ring(), wild_ring(), cub_ring()] {
+    let (q, ps) = ring
+    let c = categorify(q, ps)
+    assert_eq(c.hilbert_total(), q.dim)
+    assert_eq(c.nfactors, ps.length())
+    let mut rad = 0
+    let mut soc = 0
+    let mut tot = 0
+    for p in 0..<c.nfactors {
+      let b = c.loewy_point(p)
+      assert_eq(b[0], 1) // gr^0 = K
+      assert_eq(c.mdim(p) + 1, c.dim_at(p))
+      rad += c.mdim(p)
+      soc += c.socle(p)
+      for x in b {
+        tot += x
+      }
+      // the parameter cohomology always starts at H^0 = K and is 1 exactly
+      // when the local ring is regular
+      let k = c.kozul_point(p)
+      assert_eq(k[0], 1)
+      assert_eq(k.length() == 1, c.mdim(p) == 0)
+    }
+    assert_eq(tot, q.dim) // the Loewy filtration is exhaustive
+    // both are sums of sub-dimensions of `A`; note that `soc <= rad` fails for
+    // an etale algebra, where `rad = 0` and `soc = K` in every factor
+    assert_true(rad <= q.dim)
+    assert_true(soc <= q.dim)
+  }
+}
+
+///|
+test "T19: the frozen blocks of the three tables have the expected shapes" {
+  let (q, ps) = wild_ring()
+  let c = categorify(q, ps)
+  assert_eq(c.loewy_point(0), [1, 2, 1])
+  assert_eq(c.kozul_point(0), [1, 3, 3, 1])
+  assert_eq(c.mdim(0), 3)
+  assert_eq(c.socle(0), 1)
+  assert_eq(c.dim_at(0), 4)
+  assert_eq(c.loewy_point(1), []) // out of range
+  let (q2, ps2) = fat_ring()
+  let f = categorify(q2, ps2)
+  assert_eq(f.loewy_point(0), [1, 2])
+  assert_eq(f.kozul_point(0), [1, 3, 2])
+  let (q3, ps3) = cub_ring()
+  let e = categorify(q3, ps3)
+  assert_eq(e.nfactors, 3)
+  assert_eq(e.loewy_point(2), [1])
+  assert_eq(e.kozul_point(1), [1])
+  assert_eq(e.mdim(0), 0)
+}

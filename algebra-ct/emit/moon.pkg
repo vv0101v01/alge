@@ -3,4 +3,5 @@ import {
   "arena/algebra-ct/gb",
   "arena/algebra-ct/quot",
   "arena/algebra-ct/coho",
+  "arena/algebra-ct/cat",
 }

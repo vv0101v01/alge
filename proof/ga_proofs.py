@@ -27,12 +27,14 @@ def read_tables(path):
     out = {}
     for key in ["P", "D", "NVAR", "EDIM", "NPOINTS",
                 "RAD_DIM", "SOCLE_DIM", "COTANGENT_DIM", "EXT1_DIM",
-                "FROB_FIXED", "GROUP_ORDER", "GROUP_RANK", "KIND", "NBETTI"]:
+                "FROB_FIXED", "GROUP_ORDER", "GROUP_RANK", "KIND", "NBETTI",
+                "NHILBERT", "NLOEWY", "NKOSZUL", "NPOINTS_CAT"]:
         m = re.search(r"pub const %s : Int = (\d+)" % key, src)
         if m:
             out[key] = int(m.group(1))
     out["LOCAL"] = "pub const LOCAL : Bool = true" in src
-    for key in ["basis", "mul_tensor", "points", "betti"]:
+    for key in ["basis", "mul_tensor", "points", "betti",
+                "hilbert", "loewy", "loewy_lens", "kozul", "kozul_lens"]:
         m = re.search(r"pub let %s : Array\[Int\] = \[([^\]]*)\]" % key, src, re.S)
         if m:
             out[key] = [int(x) for x in m.group(1).split(",") if x.strip()]
@@ -226,7 +228,15 @@ def int_eq(x, y):
 
     Group orders, Betti numbers, KIND tags and dimensions are integers; they
     must NOT be compared modulo p, where e.g. |C_2 x C_2| = 4 vanishes.
+    Lists compare elementwise, so `int_eq(loewy, [1, 1, 1])` states that the
+    whole frozen block has exactly that shape.
     """
+    if isinstance(x, (list, tuple)) or isinstance(y, (list, tuple)):
+        if not (isinstance(x, (list, tuple)) and isinstance(y, (list, tuple))):
+            return z3.BoolVal(False)
+        if len(x) != len(y):
+            return z3.BoolVal(False)
+        return z3.And(*[int_eq(a, b) for a, b in zip(x, y)])
     return zint(x) == zint(y)
 
 

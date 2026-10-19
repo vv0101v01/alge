@@ -3,6 +3,7 @@ import {
   "arena/algebra-ct/quot",
   "arena/algebra-ct/emit",
   "arena/algebra-ct/coho",
+  "arena/algebra-ct/cat",
   "moonbitlang/core/env",
   "moonbitlang/core/string",
 }
